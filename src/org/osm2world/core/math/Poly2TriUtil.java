@@ -3,10 +3,8 @@ package org.osm2world.core.math;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.TreeSet;
 
 import org.poly2tri.Poly2Tri;
 import org.poly2tri.triangulation.Triangulatable;
@@ -32,13 +30,12 @@ public class Poly2TriUtil {
 
 			int n = vertices.size();
 
-			HashSet<TriangulationPoint> pointSet = new HashSet<TriangulationPoint>();
 
 			TriangulationPoint p;
 
 			for (int i = 0; i < n - 1; i++) {
 				p = new TPoint(vertices.get(i).x, vertices.get(i).z);
-				pointSet.add(p);
+				//pointSet.add(p);
 
 				segmentSet.add(new LineSegmentXZ(vertices.get(i), vertices
 						.get(i + 1)));
@@ -46,21 +43,18 @@ public class Poly2TriUtil {
 //			segmentSet.add(new LineSegmentXZ(vertices.get(vertices.size() - 2),
 //					vertices.get(0)));
 			
-			System.out.println("outer points " + pointSet.size()
-					+ " segments: " + segmentSet.size());
+			//System.out.println("outer points " + pointSet.size()
+			//		+ " segments: " + segmentSet.size());
 			
 			segmentSet.addAll(segments);
 			
-			for (LineSegmentXZ segment : segments) {
-				p = new TPoint(segment.p1.x, segment.p1.z);
-				pointSet.add(p);
-
-				p = new TPoint(segment.p2.x, segment.p2.z);
-				pointSet.add(p);
-			}
-
-			points.addAll(pointSet);
-			pointSet.clear();
+//			for (LineSegmentXZ segment : segments) {
+//				p = new TPoint(segment.p1.x, segment.p1.z);
+//				//pointSet.add(p);
+//
+//				p = new TPoint(segment.p2.x, segment.p2.z);
+//				//pointSet.add(p);
+//			}
 
 			
 			int size = segmentSet.size();
@@ -116,14 +110,32 @@ public class Poly2TriUtil {
 		public void prepareTriangulation(TriangulationContext<?> tcx) {
 			triangles.clear();
 
+			// need to make points unique objects, wtf?.. 
+			HashMap<TriangulationPoint,TriangulationPoint> pointSet = 
+					new HashMap<TriangulationPoint, TriangulationPoint>();
+		
 			for (LineSegmentXZ l : segmentSet){
 				TriangulationPoint p1 = new TPoint(l.p1.x, l.p1.z);
 				TriangulationPoint p2 = new TPoint(l.p2.x, l.p2.z);
-				System.out.println("add edge: " + p1 + "->" + p2);
+
+				if (!pointSet.containsKey(p1))
+					pointSet.put(p1,p1);
+				else
+					p1 = pointSet.get(p1);
+
+				if (!pointSet.containsKey(p2))
+					pointSet.put(p2,p2);
+				else
+					p2 = pointSet.get(p2);
+
+				
+				System.out.println("add edge: " + p1 + " -> " + p2);
 				tcx.newConstraint(p1, p2);
-				
-				
 			}
+			
+			points.addAll(pointSet.keySet());
+			pointSet.clear();
+			
 			tcx.addPoints(points);
 		}
 	}
