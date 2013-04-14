@@ -1,13 +1,30 @@
 package org.osm2world.core.world.modules;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.lang.Math.*;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+import static java.lang.Math.round;
+import static java.lang.Math.sqrt;
+import static java.lang.Math.toRadians;
 import static java.util.Arrays.asList;
-import static java.util.Collections.*;
-import static org.openstreetmap.josm.plugins.graphview.core.util.ValueStringParser.*;
-import static org.osm2world.core.math.GeometryUtil.*;
-import static org.osm2world.core.world.modules.common.WorldModuleParseUtil.*;
-import static org.osm2world.core.world.modules.common.WorldModuleTexturingUtil.*;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.nCopies;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.openstreetmap.josm.plugins.graphview.core.util.ValueStringParser.parseAngle;
+import static org.openstreetmap.josm.plugins.graphview.core.util.ValueStringParser.parseColor;
+import static org.openstreetmap.josm.plugins.graphview.core.util.ValueStringParser.parseMeasure;
+import static org.openstreetmap.josm.plugins.graphview.core.util.ValueStringParser.parseOsmDecimal;
+import static org.osm2world.core.math.GeometryUtil.distanceFromLine;
+import static org.osm2world.core.math.GeometryUtil.distanceFromLineSegment;
+import static org.osm2world.core.math.GeometryUtil.insertIntoPolygon;
+import static org.osm2world.core.math.GeometryUtil.interpolateBetween;
+import static org.osm2world.core.math.GeometryUtil.interpolateValue;
+import static org.osm2world.core.world.modules.common.WorldModuleParseUtil.parseHeight;
+import static org.osm2world.core.world.modules.common.WorldModuleParseUtil.parseWidth;
+import static org.osm2world.core.world.modules.common.WorldModuleTexturingUtil.globalTexCoordLists;
+import static org.osm2world.core.world.modules.common.WorldModuleTexturingUtil.slopedFaceTexCoordLists;
+import static org.osm2world.core.world.modules.common.WorldModuleTexturingUtil.wallTexCoordLists;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -18,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.openstreetmap.josm.plugins.graphview.core.data.Tag;
 import org.openstreetmap.josm.plugins.graphview.core.data.TagGroup;
 import org.osm2world.core.map_data.data.MapArea;
 import org.osm2world.core.map_data.data.MapData;
@@ -105,8 +123,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 					MapArea otherArea = (MapArea)other;
 					
 					//TODO: check whether the building contains the part (instead of just touching it)
-					if (area.getPolygon().contains(
-							otherArea.getPolygon().getOuter())) {
+					if (area.getPolygon().contains(otherArea.getPolygon().getOuter())) {
 						parts.add(new BuildingPart(this, otherArea,
 							otherArea.getPolygon(), useBuildingColors,
 							drawBuildingWindows));
@@ -120,7 +137,8 @@ public class BuildingModule extends ConfigurableWorldModule {
 			if (parts.isEmpty()) {
 				parts.add(new BuildingPart(this, area,
 						area.getPolygon(), useBuildingColors, drawBuildingWindows));
-			} else {
+			} 
+			else {
 				
 				List<SimplePolygonXZ> subtractPolygons = new ArrayList<SimplePolygonXZ>();
 				
@@ -138,7 +156,6 @@ public class BuildingModule extends ConfigurableWorldModule {
 					parts.add(new BuildingPart(this, area, remainingPoly,
 							useBuildingColors, drawBuildingWindows));
 				}
-				
 			}
 			
 		}
@@ -220,7 +237,12 @@ public class BuildingModule extends ConfigurableWorldModule {
 			this.building = building;
 			this.area = area;
 			this.polygon = polygon;
-
+			System.out.println("building:part");
+			for (Tag t : this.area.getTags()){
+				System.out.println("  " + t);
+				
+			}
+			
 			setAttributes(useBuildingColors, drawBuildingWindows);
 			
 			for (MapNode node : area.getBoundaryNodes()) {
@@ -633,50 +655,49 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 			boolean explicitRoofTagging = true;
 			
-			if (hasComplexRoof(area)) {
-				roof = new ComplexRoof();
-			} else {
-				
-				String roofShape = getValue("roof:shape");
-				if (roofShape == null) { roofShape = getValue("building:roof:shape"); }
-				
-				if (roofShape == null) {
+			
+			String roofShape = getValue("roof:shape");
+			if (roofShape == null) { roofShape = getValue("building:roof:shape"); }
+			
+			if (roofShape == null || "complex".equals(roofShape)) {
+				if (hasComplexRoof(area)) {
+					roof = new ComplexRoof();
+				} else{
 					roofShape = defaultRoofShape;
-					explicitRoofTagging = false;
 				}
 				
-				try {
-					
-					if ("pyramidal".equals(roofShape)) {
-						roof = new PyramidalRoof();
-					} else if ("onion".equals(roofShape)) {
-						roof = new OnionRoof();
-					} else if ("skillion".equals(roofShape)) {
-						roof = new SkillionRoof();
-					} else if ("gabled".equals(roofShape)) {
-						roof = new GabledRoof();
-					} else if ("hipped".equals(roofShape)) {
-						roof = new HippedRoof();
-					} else if ("half-hipped".equals(roofShape)) {
-						roof = new HalfHippedRoof();
-					} else if ("gambrel".equals(roofShape)) {
-						roof = new GambrelRoof();
-					} else if ("mansard".equals(roofShape)) {
-						roof = new MansardRoof();
-					} else if ("dome".equals(roofShape)) {
-						roof = new DomeRoof();
-					} else if ("round".equals(roofShape)) {
-						roof = new RoundRoof();
-					} else {
-						roof = new FlatRoof();
-					}
-					
-				} catch (InvalidGeometryException e) {
-					System.err.println("falling back to FlatRoof: " + e);
+				explicitRoofTagging = false;
+			}
+			
+			try {
+				
+				if ("pyramidal".equals(roofShape)) {
+					roof = new PyramidalRoof();
+				} else if ("onion".equals(roofShape)) {
+					roof = new OnionRoof();
+				} else if ("skillion".equals(roofShape)) {
+					roof = new SkillionRoof();
+				} else if ("gabled".equals(roofShape)) {
+					roof = new GabledRoof();
+				} else if ("hipped".equals(roofShape)) {
+					roof = new HippedRoof();
+				} else if ("half-hipped".equals(roofShape)) {
+					roof = new HalfHippedRoof();
+				} else if ("gambrel".equals(roofShape)) {
+					roof = new GambrelRoof();
+				} else if ("mansard".equals(roofShape)) {
+					roof = new MansardRoof();
+				} else if ("dome".equals(roofShape)) {
+					roof = new DomeRoof();
+				} else if ("round".equals(roofShape)) {
+					roof = new RoundRoof();
+				} else if ("flat".equals(roofShape)) 
 					roof = new FlatRoof();
-					explicitRoofTagging = false;
-				}
 				
+			} catch (InvalidGeometryException e) {
+				System.err.println("falling back to FlatRoof: " + e);
+				roof = new FlatRoof();
+				explicitRoofTagging = false;
 			}
 			
 			/* determine height */
@@ -1201,6 +1222,12 @@ public class BuildingModule extends ConfigurableWorldModule {
 				/* create the triangulation of the roof */
 				
 				Collection<TriangleXZ> triangles =
+//						Poly2TriUtil.triangulate(
+//								getPolygon().getOuter(),
+//								getPolygon().getHoles(),
+//								getInnerSegments(),
+//								getInnerPoints());
+				
 						JTSTriangulationUtil.triangulate(
 								getPolygon().getOuter(),
 								getPolygon().getHoles(),
@@ -1770,8 +1797,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			public RoundRoof() {
 
 				super(0);
-
-				if (roofHeight < maxDistanceToRidge) {
+				if (roofHeight < maxDistanceToRidge + 0.5) {
 					double squaredHeight = roofHeight * roofHeight;
 					double squaredDist = maxDistanceToRidge * maxDistanceToRidge;
 					double centerY =  (squaredDist - squaredHeight) / (2 * roofHeight);
@@ -1779,7 +1805,9 @@ public class BuildingModule extends ConfigurableWorldModule {
 				} else {
 					radius = 0;
 				}
-				
+
+				System.out.println("roofHeight " + roofHeight +" " + maxDistanceToRidge);
+
 				rings = (int)Math.max(3, roofHeight/ROOF_SUBDIVISION_METER);
 				capParts = new ArrayList<LineSegmentXZ>(rings*2);
 				// TODO: would be good to vary step size with slope
@@ -1939,56 +1967,122 @@ public class BuildingModule extends ConfigurableWorldModule {
 				
 				ridgeAndEdgeSegments = new ArrayList<LineSegmentXZ>();
 				
+				List<MapNode> nodes = area.getBoundaryNodes();
+				List<MapWaySegment> edges = new ArrayList<MapWaySegment>();
+				List<MapWaySegment> allRidges = new ArrayList<MapWaySegment>();
+				List<MapWaySegment> ridges = new ArrayList<MapWaySegment>();
+				
+				System.out.println("complex roof");
+				
+				if (area.getTags().containsKey(ROOF_HEIGHT)){
+					roofHeight = parseMeasure(area.getTags().getValue(ROOF_HEIGHT));
+					System.out.println("part height " + roofHeight);
+				}
+				
+				/* collect edges with startNode connected to area
+				 * collect all contained ridges */
 				for (MapOverlap<?,?> overlap : area.getOverlaps()) {
 					
 					if (overlap instanceof MapOverlapWA) {
 						
 						MapWaySegment waySegment = ((MapOverlapWA)overlap).e1;
 						
-						if (!polygon.contains(waySegment.getCenter())) {
+						boolean isRidge = waySegment.getTags().contains(ROOF_RIDGE, YES);
+						boolean isEdge = waySegment.getTags().contains(ROOF_EDGE, YES);
+						
+						if (!(isRidge || isEdge))
 							continue;
-						}
 						
-						boolean isRidge = waySegment.getTags().contains("roof:ridge", "yes");
-						boolean isEdge = waySegment.getTags().contains("roof:edge", "yes");
+						boolean containsStart = nodes.contains(waySegment.getStartNode()); 
+						boolean containsEnd = nodes.contains(waySegment.getStartNode());
+
+						if (!polygon.contains(waySegment.getCenter())) {
+							if (!containsStart && !containsEnd) 
+								continue;
+						}
 												
-						if (isRidge || isEdge) {
-							
-							ridgeAndEdgeSegments.add(waySegment.getLineSegment());
-							
-							for (MapNode node : waySegment.getStartEndNodes()) {
-								
-								// height of node (above roof base)
-								Float nodeHeight = null;
-								
-								if (node.getTags().containsKey("roof:height")) {
-									nodeHeight = parseMeasure(
-											node.getTags().getValue("roof:height"));
-								} else if (waySegment.getTags().containsKey("roof:height")) {
-									nodeHeight = parseMeasure(
-											waySegment.getTags().getValue("roof:height"));
-								} else if (node.getTags().contains("roof:apex", "yes")) {
-									nodeHeight = DEFAULT_RIDGE_HEIGHT;
-								} else if (isRidge) {
-									nodeHeight = DEFAULT_RIDGE_HEIGHT;
-								}
-								
-								if (nodeHeight != null) {
-									
-									roofHeightMap.put(node.getPos(), (double)nodeHeight);
-									
-									roofHeight = max(roofHeight, nodeHeight);
-									
-								}
-								
+						if (isEdge){
+							if (containsStart){
+								edges.add(waySegment);
 							}
-							
+						} else if (isRidge){
+							if (containsStart && containsEnd){
+								ridges.add(waySegment);
+							} else
+								allRidges.add(waySegment);							
 						}
-						
 					}
-					
 				}
 				
+				/* remove ridges that are not connected to edges */
+				for (MapWaySegment ridge : allRidges){
+					
+					for (MapWaySegment edge : edges){
+						if (edge.isConnectedTo(ridge)){
+							ridges.add(ridge);
+							break;
+						}
+					}
+				}
+				
+				//allRidges.addAll(ridges);
+				
+				System.out.println("- ridges: " + ridges.size());
+				System.out.println("- edges : " + edges.size());
+
+				for (MapWaySegment waySegment : ridges) {
+
+					ridgeAndEdgeSegments.add(waySegment.getLineSegment());
+
+					for (MapNode node : waySegment.getStartEndNodes()) {
+
+						// height of node (above roof base)
+						Float nodeHeight = null;
+						
+						// -- shouldnt a ridge only have one height?
+						//if (node.getTags().containsKey(ROOF_HEIGHT)) {
+						//	nodeHeight = parseMeasure(node.getTags().getValue(ROOF_HEIGHT));
+						//} else
+						
+						if (waySegment.getTags().containsKey(ROOF_HEIGHT)) {
+							nodeHeight = parseMeasure(waySegment.getTags().getValue(ROOF_HEIGHT));
+						//} else if (node.getTags().contains("roof:apex", "yes")) {
+						//	nodeHeight = DEFAULT_RIDGE_HEIGHT;
+						} else {
+							nodeHeight = (float)roofHeight; //DEFAULT_RIDGE_HEIGHT;
+						}
+
+						if (nodeHeight != null) {
+							roofHeightMap.put(node.getPos(), (double) nodeHeight);
+							roofHeight = max(roofHeight, nodeHeight);
+						}
+					}
+				}
+
+				for (MapWaySegment waySegment : edges) {
+
+					ridgeAndEdgeSegments.add(waySegment.getLineSegment());
+
+					for (MapNode node : waySegment.getStartEndNodes()) {
+
+						// height of node (above roof base)
+						Float nodeHeight = null;
+
+						if (node.getTags().containsKey(ROOF_HEIGHT)) {
+							nodeHeight = parseMeasure(node.getTags().getValue(ROOF_HEIGHT));
+						} else if (waySegment.getTags().containsKey(ROOF_HEIGHT)) {
+							nodeHeight = parseMeasure(waySegment.getTags().getValue(ROOF_HEIGHT));
+						} else if (node.getTags().contains("roof:apex", "yes")) {
+							nodeHeight = DEFAULT_RIDGE_HEIGHT;
+						} 
+
+						if (nodeHeight != null) {
+							roofHeightMap.put(node.getPos(), (double) nodeHeight);
+							roofHeight = max(roofHeight, nodeHeight);
+						}
+					}
+				}
+
 				/* add heights for outline nodes that don't have one yet */
 				
 				for (VectorXZ v : polygon.getOuter().getVertices()) {
@@ -2061,12 +2155,27 @@ public class BuildingModule extends ConfigurableWorldModule {
 		}
 				
 		public static boolean hasComplexRoof(MapArea area) {
+			List<MapNode> nodes = area.getBoundaryNodes();
+			
 			for (MapOverlap<?,?> overlap : area.getOverlaps()) {
 				if (overlap instanceof MapOverlapWA) {
 					TagGroup tags = overlap.e1.getTags();
-					if (tags.contains("roof:ridge", "yes")
-							|| tags.contains("roof:edge", "yes")) {
-						return true;
+					// complex roof must be connected to at least one edge
+					// which start node is connected to the building:part
+
+					if (tags.contains(ROOF_EDGE, YES)) {
+
+						MapOverlapWA o = (MapOverlapWA)overlap;
+
+						if (nodes.contains(o.e1.getStartNode())) 
+						
+							return true;
+					} else if (tags.contains(ROOF_RIDGE, YES)){
+						MapOverlapWA o = (MapOverlapWA)overlap;
+
+						if (nodes.contains(o.e1.getStartNode()) && 
+								nodes.contains(o.e1.getEndNode())) 
+							return true;
 					}
 				}
 			}
@@ -2149,4 +2258,9 @@ public class BuildingModule extends ConfigurableWorldModule {
 		
 	}
 
+	final static String YES = "yes";
+	final static String ROOF_HEIGHT = "roof:height";
+	final static String ROOF_RIDGE= "roof:ridge";
+	final static String ROOF_EDGE= "roof:edge";
+	final static String HEIGHT = "height";
 }
