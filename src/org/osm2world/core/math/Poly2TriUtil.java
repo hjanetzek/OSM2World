@@ -2,7 +2,6 @@ package org.osm2world.core.math;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -14,6 +13,9 @@ import org.poly2tri.triangulation.TriangulationMode;
 import org.poly2tri.triangulation.TriangulationPoint;
 import org.poly2tri.triangulation.delaunay.DelaunayTriangle;
 import org.poly2tri.triangulation.point.TPoint;
+/**
+ * @author Hannes Janetzek
+ * */
 
 public class Poly2TriUtil {
 	static class CDTSet implements Triangulatable {
@@ -31,28 +33,64 @@ public class Poly2TriUtil {
 			segmentSet.addAll(segments);
 
 			for (int i = 0, n = vertices.size() - 1; i < n; i++)
-				segmentSet.add(new LineSegmentXZ(vertices.get(i), 
+				segmentSet.add(new LineSegmentXZ(vertices.get(i),
 						vertices.get(i + 1)));
 
 			for (SimplePolygonXZ hole : holes) {
 				vertices = hole.getVertexLoop();
 				for (int i = 0, n = vertices.size() - 1; i < n; i++)
-					segmentSet.add(new LineSegmentXZ(vertices.get(i), 
+					segmentSet.add(new LineSegmentXZ(vertices.get(i),
 							vertices.get(i + 1)));
 			}
 
-			int size = segmentSet.size();
+			removeDuplicateSegments();
 
-			for (int i = 0; i < size - 1; i++) {
+			boolean foundIntersections = false;
+
+			// split at intersections
+			for (int i = 0, size = segmentSet.size(); i < size - 1; i++) {
 				LineSegmentXZ l1 = segmentSet.get(i);
 
 				for (int j = i + 1; j < size; j++) {
 					LineSegmentXZ l2 = segmentSet.get(j);
 
-					if ((l1.p1.x == l2.p1.x && l1.p1.z == l2.p1.z
-							&& l1.p2.x == l2.p2.x && l1.p2.z == l2.p2.z)
-							|| (l1.p1.x == l2.p2.x && l1.p1.z == l2.p2.z
-									&& l1.p2.x == l2.p1.x && l1.p2.z == l2.p1.z)) {
+					VectorXZ crossing;
+
+					if ((crossing = l1.getIntersection(l2.p1, l2.p2)) != null) {
+						System.out.println("split " + l1 + " " + l2 + " at "
+								+ crossing);
+						foundIntersections = true;
+
+						segmentSet.remove(l1);
+						segmentSet.remove(l2);
+
+						segmentSet.add(new LineSegmentXZ(crossing, l1.p1));
+						segmentSet.add(new LineSegmentXZ(crossing, l1.p2));
+						segmentSet.add(new LineSegmentXZ(crossing, l2.p1));
+						segmentSet.add(new LineSegmentXZ(crossing, l2.p2));
+
+						size += 2;
+
+						// first segment was removed
+						i--;
+						break;
+					}
+				}
+			}
+
+			if (foundIntersections)
+				removeDuplicateSegments();
+		}
+
+		private void removeDuplicateSegments() {
+			for (int i = 0, size = segmentSet.size(); i < size - 1; i++) {
+				LineSegmentXZ l1 = segmentSet.get(i);
+
+				for (int j = i + 1; j < size; j++) {
+					LineSegmentXZ l2 = segmentSet.get(j);
+
+					if ((l1.p1.equals(l2.p1) && l1.p2.equals(l2.p2))
+							|| (l1.p1.equals(l2.p2) && l1.p2.equals(l2.p1))) {
 						System.out.println("remove dup " + l1 + " " + l2);
 						segmentSet.remove(j);
 						size--;
@@ -89,7 +127,7 @@ public class Poly2TriUtil {
 			triangles.clear();
 
 			// need to make points unique objects, wtf?..
-			HashMap<TriangulationPoint, TriangulationPoint> pointSet 
+			HashMap<TriangulationPoint, TriangulationPoint> pointSet
 				= new HashMap<TriangulationPoint, TriangulationPoint>();
 
 			for (LineSegmentXZ l : segmentSet) {
@@ -132,49 +170,31 @@ public class Poly2TriUtil {
 
 		List<TriangleXZ> triangles = new ArrayList<TriangleXZ>();
 
-		// List<DelaunayTriangle> result = tcx.getTriangles();
 		List<DelaunayTriangle> result = cdt.getTriangles();
 
-		if (result == null) {
-			System.out.println("...... missing triangles ......");
+		if (result == null)
 			return triangles;
-		}
-
-		Collection<PolygonWithHolesXZ> trianglesAsPolygons 
-			= new ArrayList<PolygonWithHolesXZ>();
 
 		for (DelaunayTriangle t : result) {
-			List<VectorXZ> triVertices = new ArrayList<VectorXZ>(3);
-			for (int i = 0; i < 3; i++)
-				triVertices.add(new VectorXZ(t.points[i].getX(), t.points[i]
-						.getY()));
 
-			triVertices.add(triVertices.get(0));
-
-			trianglesAsPolygons.add(new PolygonWithHolesXZ(new SimplePolygonXZ(
-					triVertices), Collections.<SimplePolygonXZ> emptyList()));
-		}
-
-		for (PolygonWithHolesXZ triangleAsPolygon : trianglesAsPolygons) {
+			TriangulationPoint tCenter = t.centroid();
+			VectorXZ center = new VectorXZ(tCenter.getX(), tCenter.getY());
 
 			boolean triangleInHole = false;
 			for (SimplePolygonXZ hole : holes) {
-				if (hole.contains(triangleAsPolygon.getOuter().getCenter())) {
+				if (hole.contains(center)) {
 					triangleInHole = true;
 					break;
 				}
 			}
 
-			if (!triangleInHole
-					&& polygon.contains(triangleAsPolygon.getOuter()
-							.getCenter())) { // TODO: create single method for
-												// this query within
-												// PolygonWithHoles
+			if (triangleInHole || !polygon.contains(center))
+				continue;
 
-				triangles.add(triangleAsPolygon.asTriangleXZ());
-
-			}
-
+			triangles.add(new TriangleXZ(new VectorXZ(t.points[0].getX(),
+					t.points[0].getY()), new VectorXZ(t.points[1].getX(),
+					t.points[1].getY()), new VectorXZ(t.points[2].getX(),
+					t.points[2].getY())));
 		}
 
 		return triangles;
