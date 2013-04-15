@@ -91,7 +91,7 @@ public class Poly2TriUtil {
 
 					if ((l1.p1.equals(l2.p1) && l1.p2.equals(l2.p2))
 							|| (l1.p1.equals(l2.p2) && l1.p2.equals(l2.p1))) {
-						System.out.println("remove dup " + l1 + " " + l2);
+						//System.out.println("remove dup " + l1 + " " + l2);
 						segmentSet.remove(j);
 						size--;
 					}
