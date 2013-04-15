@@ -17,8 +17,8 @@ import org.poly2tri.triangulation.point.TPoint;
 
 public class Poly2TriUtil {
 	static class CDTSet implements Triangulatable {
-		List<TriangulationPoint> points = new ArrayList<TriangulationPoint>(100);
-		List<DelaunayTriangle> triangles = new ArrayList<DelaunayTriangle>(100);
+		List<TriangulationPoint> points = new ArrayList<TriangulationPoint>(20);
+		List<DelaunayTriangle> triangles = new ArrayList<DelaunayTriangle>(20);
 
 		ArrayList<LineSegmentXZ> segmentSet = new ArrayList<LineSegmentXZ>();
 
@@ -28,34 +28,10 @@ public class Poly2TriUtil {
 
 			List<VectorXZ> vertices = polygon.getVertexLoop();
 
-			int n = vertices.size();
-
-
-			TriangulationPoint p;
-
-			for (int i = 0; i < n - 1; i++) {
-				p = new TPoint(vertices.get(i).x, vertices.get(i).z);
-				//pointSet.add(p);
-
-				segmentSet.add(new LineSegmentXZ(vertices.get(i), vertices
-						.get(i + 1)));
-			}
-//			segmentSet.add(new LineSegmentXZ(vertices.get(vertices.size() - 2),
-//					vertices.get(0)));
-			
-			//System.out.println("outer points " + pointSet.size()
-			//		+ " segments: " + segmentSet.size());
+			for (int i = 0, n = vertices.size() - 1; i < n; i++)
+				segmentSet.add(new LineSegmentXZ(vertices.get(i), vertices.get(i + 1)));
 			
 			segmentSet.addAll(segments);
-			
-//			for (LineSegmentXZ segment : segments) {
-//				p = new TPoint(segment.p1.x, segment.p1.z);
-//				//pointSet.add(p);
-//
-//				p = new TPoint(segment.p2.x, segment.p2.z);
-//				//pointSet.add(p);
-//			}
-
 			
 			int size = segmentSet.size();
 			
@@ -75,12 +51,6 @@ public class Poly2TriUtil {
 					}
 				}
 			}
-			
-
-			System.out.println("all points " + points.size() 
-					+ " segments: " + segmentSet.size());
-			
-
 		}
 
 		public TriangulationMode getTriangulationMode() {
@@ -128,10 +98,11 @@ public class Poly2TriUtil {
 				else
 					p2 = pointSet.get(p2);
 
-				
-				System.out.println("add edge: " + p1 + " -> " + p2);
+				//System.out.println("add edge: " + p1 + " -> " + p2);
 				tcx.newConstraint(p1, p2);
 			}
+
+			segmentSet.clear();
 			
 			points.addAll(pointSet.keySet());
 			pointSet.clear();
