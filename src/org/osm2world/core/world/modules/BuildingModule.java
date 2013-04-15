@@ -1207,12 +1207,20 @@ public class BuildingModule extends ConfigurableWorldModule {
 					}
 					
 					// use that segment for height interpolation
+					if (closestSegment == null){
+						System.out.println("ERR: no segments");
+						return 0;
+					}
+					Double ele1 = getRoofEleAt_noInterpolation(closestSegment.p1);
+					Double ele2 = getRoofEleAt_noInterpolation(closestSegment.p2);
 					
+					if (ele1 == null || ele1 == null){
+						System.out.println("ERR: missing height...");
+						return 0;						
+					}
 					return interpolateValue(v,
-							closestSegment.p1,
-							getRoofEleAt_noInterpolation(closestSegment.p1),
-							closestSegment.p2,
-							getRoofEleAt_noInterpolation(closestSegment.p2));
+							closestSegment.p1, ele1,
+							closestSegment.p2, ele2);
 					
 				}
 			}
@@ -1996,37 +2004,45 @@ public class BuildingModule extends ConfigurableWorldModule {
 						if (!(isRidge || isEdge))
 							continue;
 						
+						boolean inside = polygon.contains(waySegment.getCenter());
+
+						// check also endpoints as pnpoly is not reliable when
+						// segment lies on the polygon edge
 						boolean containsStart = nodes.contains(waySegment.getStartNode()); 
 						boolean containsEnd = nodes.contains(waySegment.getStartNode());
 
-						if (!polygon.contains(waySegment.getCenter())) {
-							if (!containsStart && !containsEnd) 
+						if (!inside && !(containsStart && containsEnd)) {
+							//if (!containsStart && !containsEnd) 
 								continue;
 						}
 												
 						if (isEdge){
-							if (containsStart){
+							if (inside || (containsStart && containsEnd)){
 								edges.add(waySegment);
 							}
 						} else if (isRidge){
-							if (containsStart && containsEnd){
+							if (inside || (containsStart && containsEnd)){
 								ridges.add(waySegment);
-							} else
-								allRidges.add(waySegment);							
+							}
+
+//							if (containsStart && containsEnd){
+//								ridges.add(waySegment);
+//							} else
+//								allRidges.add(waySegment);							
 						}
 					}
 				}
 				
-				/* remove ridges that are not connected to edges */
-				for (MapWaySegment ridge : allRidges){
-					
-					for (MapWaySegment edge : edges){
-						if (edge.isConnectedTo(ridge)){
-							ridges.add(ridge);
-							break;
-						}
-					}
-				}
+//				/* remove ridges that are not connected to edges */
+//				for (MapWaySegment ridge : allRidges){
+//					
+//					for (MapWaySegment edge : edges){
+//						if (edge.isConnectedTo(ridge)){
+//							ridges.add(ridge);
+//							break;
+//						}
+//					}
+//				}
 				
 				//allRidges.addAll(ridges);
 				
