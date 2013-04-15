@@ -658,12 +658,13 @@ public class BuildingModule extends ConfigurableWorldModule {
 
 			boolean explicitRoofTagging = true;
 
-
 			String roofShape = getValue("roof:shape");
-			if (roofShape == null) { roofShape = getValue("building:roof:shape"); }
+			if (roofShape == null) {
+					roofShape = getValue("building:roof:shape");
+				}
 
-			if (roofShape == null || "complex".equals(roofShape)) {
-				if (hasComplexRoof(area)) {
+			if (roofShape == null) {
+				if (!(NO.equals(tags.getValue(ROOF_LINES))) && hasComplexRoof(area)) {
 					roof = new ComplexRoof();
 				} else{
 					roofShape = defaultRoofShape;
@@ -2009,7 +2010,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 						// check also endpoints as pnpoly is not reliable when
 						// segment lies on the polygon edge
 						boolean containsStart = nodes.contains(waySegment.getStartNode());
-						boolean containsEnd = nodes.contains(waySegment.getStartNode());
+						boolean containsEnd = nodes.contains(waySegment.getEndNode());
 
 						if (!inside && !(containsStart && containsEnd)) {
 							//if (!containsStart && !containsEnd)
@@ -2051,6 +2052,30 @@ public class BuildingModule extends ConfigurableWorldModule {
 					System.out.println("- edges : " + edges.size());
 				}
 
+				for (MapWaySegment waySegment : edges) {
+
+					ridgeAndEdgeSegments.add(waySegment.getLineSegment());
+
+					for (MapNode node : waySegment.getStartEndNodes()) {
+
+						// height of node (above roof base)
+						Float nodeHeight = null;
+
+						if (node.getTags().containsKey(ROOF_HEIGHT)) {
+							nodeHeight = parseMeasure(node.getTags().getValue(ROOF_HEIGHT));
+						} else if (waySegment.getTags().containsKey(ROOF_HEIGHT)) {
+							nodeHeight = parseMeasure(waySegment.getTags().getValue(ROOF_HEIGHT));
+						} else if (node.getTags().contains("roof:apex", "yes")) {
+							nodeHeight = DEFAULT_RIDGE_HEIGHT;
+						}
+
+						if (nodeHeight != null) {
+							roofHeightMap.put(node.getPos(), (double) nodeHeight);
+							roofHeight = max(roofHeight, nodeHeight);
+						}
+					}
+				}
+
 				for (MapWaySegment waySegment : ridges) {
 
 					ridgeAndEdgeSegments.add(waySegment.getLineSegment());
@@ -2080,29 +2105,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 					}
 				}
 
-				for (MapWaySegment waySegment : edges) {
 
-					ridgeAndEdgeSegments.add(waySegment.getLineSegment());
-
-					for (MapNode node : waySegment.getStartEndNodes()) {
-
-						// height of node (above roof base)
-						Float nodeHeight = null;
-
-						if (node.getTags().containsKey(ROOF_HEIGHT)) {
-							nodeHeight = parseMeasure(node.getTags().getValue(ROOF_HEIGHT));
-						} else if (waySegment.getTags().containsKey(ROOF_HEIGHT)) {
-							nodeHeight = parseMeasure(waySegment.getTags().getValue(ROOF_HEIGHT));
-						} else if (node.getTags().contains("roof:apex", "yes")) {
-							nodeHeight = DEFAULT_RIDGE_HEIGHT;
-						}
-
-						if (nodeHeight != null) {
-							roofHeightMap.put(node.getPos(), (double) nodeHeight);
-							roofHeight = max(roofHeight, nodeHeight);
-						}
-					}
-				}
 
 				/* add heights for outline nodes that don't have one yet */
 
@@ -2280,8 +2283,10 @@ public class BuildingModule extends ConfigurableWorldModule {
 	}
 
 	final static String YES = "yes";
+	final static String NO = "no";
 	final static String ROOF_HEIGHT = "roof:height";
 	final static String ROOF_RIDGE= "roof:ridge";
 	final static String ROOF_EDGE= "roof:edge";
 	final static String HEIGHT = "height";
+	final static String ROOF_LINES = "roof:lines";
 }
