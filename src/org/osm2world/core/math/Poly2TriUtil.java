@@ -28,17 +28,25 @@ public class Poly2TriUtil {
 
 			List<VectorXZ> vertices = polygon.getVertexLoop();
 
-			for (int i = 0, n = vertices.size() - 1; i < n; i++)
-				segmentSet.add(new LineSegmentXZ(vertices.get(i), vertices.get(i + 1)));
-			
 			segmentSet.addAll(segments);
-			
+
+			for (int i = 0, n = vertices.size() - 1; i < n; i++)
+				segmentSet.add(new LineSegmentXZ(vertices.get(i), 
+						vertices.get(i + 1)));
+
+			for (SimplePolygonXZ hole : holes) {
+				vertices = hole.getVertexLoop();
+				for (int i = 0, n = vertices.size() - 1; i < n; i++)
+					segmentSet.add(new LineSegmentXZ(vertices.get(i), 
+							vertices.get(i + 1)));
+			}
+
 			int size = segmentSet.size();
-			
-			for (int i = 0;i < size - 1; i++){
+
+			for (int i = 0; i < size - 1; i++) {
 				LineSegmentXZ l1 = segmentSet.get(i);
 
-				for (int j = i + 1; j < size; j++){
+				for (int j = i + 1; j < size; j++) {
 					LineSegmentXZ l2 = segmentSet.get(j);
 
 					if ((l1.p1.x == l2.p1.x && l1.p1.z == l2.p1.z
@@ -80,33 +88,33 @@ public class Poly2TriUtil {
 		public void prepareTriangulation(TriangulationContext<?> tcx) {
 			triangles.clear();
 
-			// need to make points unique objects, wtf?.. 
-			HashMap<TriangulationPoint,TriangulationPoint> pointSet = 
-					new HashMap<TriangulationPoint, TriangulationPoint>();
-		
-			for (LineSegmentXZ l : segmentSet){
+			// need to make points unique objects, wtf?..
+			HashMap<TriangulationPoint, TriangulationPoint> pointSet 
+				= new HashMap<TriangulationPoint, TriangulationPoint>();
+
+			for (LineSegmentXZ l : segmentSet) {
 				TriangulationPoint p1 = new TPoint(l.p1.x, l.p1.z);
 				TriangulationPoint p2 = new TPoint(l.p2.x, l.p2.z);
 
 				if (!pointSet.containsKey(p1))
-					pointSet.put(p1,p1);
+					pointSet.put(p1, p1);
 				else
 					p1 = pointSet.get(p1);
 
 				if (!pointSet.containsKey(p2))
-					pointSet.put(p2,p2);
+					pointSet.put(p2, p2);
 				else
 					p2 = pointSet.get(p2);
 
-				//System.out.println("add edge: " + p1 + " -> " + p2);
+				// System.out.println("add edge: " + p1 + " -> " + p2);
 				tcx.newConstraint(p1, p2);
 			}
 
 			segmentSet.clear();
-			
+
 			points.addAll(pointSet.keySet());
 			pointSet.clear();
-			
+
 			tcx.addPoints(points);
 		}
 	}
@@ -132,7 +140,8 @@ public class Poly2TriUtil {
 			return triangles;
 		}
 
-		Collection<PolygonWithHolesXZ> trianglesAsPolygons = new ArrayList<PolygonWithHolesXZ>();
+		Collection<PolygonWithHolesXZ> trianglesAsPolygons 
+			= new ArrayList<PolygonWithHolesXZ>();
 
 		for (DelaunayTriangle t : result) {
 			List<VectorXZ> triVertices = new ArrayList<VectorXZ>(3);
