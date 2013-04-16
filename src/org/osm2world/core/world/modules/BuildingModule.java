@@ -30,6 +30,7 @@ import org.osm2world.core.map_data.data.overlaps.MapOverlap;
 import org.osm2world.core.map_data.data.overlaps.MapOverlapWA;
 import org.osm2world.core.map_elevation.data.GroundState;
 import org.osm2world.core.math.InvalidGeometryException;
+import org.osm2world.core.math.JTSConversionUtil;
 import org.osm2world.core.math.LineSegmentXZ;
 import org.osm2world.core.math.Poly2TriUtil;
 import org.osm2world.core.math.PolygonWithHolesXZ;
@@ -60,6 +61,11 @@ import com.google.common.base.Function;
 
 /**
  * adds buildings to the world
+ * 
+ * TODO:
+ * - use est_height key?
+ * - add option to disable floor for optimization
+ * 
  */
 public class BuildingModule extends ConfigurableWorldModule {
 	
@@ -350,19 +356,23 @@ public class BuildingModule extends ConfigurableWorldModule {
 				}
 				
 				subtractPolygons.addAll(roof.getPolygon().getHoles());
-				
-				Collection<PolygonWithHolesXZ> buildingPartPolys =
-					CAGUtil.subtractPolygons(
-							roof.getPolygon().getOuter(),
-							subtractPolygons);
-				
-				for (PolygonWithHolesXZ p : buildingPartPolys) {
-					renderWalls(target, p, false, baseEle, floorHeight, roof);
-					if (renderFloor) {
-						renderFloor(target, baseEle + floorHeight);
+				if (subtractPolygons.size() > 0) {
+					Collection<PolygonWithHolesXZ> buildingPartPolys = CAGUtil
+							.subtractPolygons(roof.getPolygon().getOuter(),
+									subtractPolygons);
+
+					for (PolygonWithHolesXZ p : buildingPartPolys) {
+						renderWalls(target, p, false, baseEle, floorHeight,
+								roof);
+						if (renderFloor) {
+							renderFloor(target, baseEle + floorHeight);
+						}
 					}
+				} else{
+					renderWalls(target, roof.getPolygon(), false,
+							baseEle, floorHeight, roof);
 				}
-				
+
 				/* render building parts above the terrain boundaries */
 				
 				for (TerrainBoundaryWorldObject o : tbWorldObjects) {
@@ -1243,7 +1253,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 		}
 		
 		private class FlatRoof extends HeightfieldRoof {
-				
+
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
 				return polygon;
