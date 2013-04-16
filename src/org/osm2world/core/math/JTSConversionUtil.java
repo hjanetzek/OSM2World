@@ -69,6 +69,38 @@ public class JTSConversionUtil {
 		
 	}
 	
+	public static final Polygon polygonXZToJTSPolygon(PolygonWithHolesXZ polygon) {
+
+		List<VectorXZ> vertices = polygon.getOuter().getVertexLoop();
+
+		Coordinate[] array = new Coordinate[vertices.size()];
+
+		for (int i = 0; i < array.length; i++) {
+			VectorXZ vertex = vertices.get(i);
+			array[i] = vectorXZToJTSCoordinate(vertex);
+		}
+		LinearRing outer = new LinearRing(new CoordinateArraySequence(array), GF);
+		
+		LinearRing[] holes = null;
+		int n = polygon.getHoles().size();
+		if (n > 0) {
+			holes = new LinearRing[n];
+
+			for (int j = 0; j < n; j++) {
+				vertices = polygon.getHoles().get(j).getVertexLoop();
+				array = new Coordinate[vertices.size()];
+
+				for (int i = 0; i < array.length; i++) {
+					VectorXZ vertex = vertices.get(i);
+					array[i] = vectorXZToJTSCoordinate(vertex);
+				}
+				holes[j] = new LinearRing(new CoordinateArraySequence(array),
+						GF);
+			}
+		}
+		return new Polygon(outer, holes, GF);
+	}
+	
 	public static final PolygonWithHolesXZ
 		polygonXZFromJTSPolygon(Polygon polygon) {
 		

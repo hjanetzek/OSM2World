@@ -58,6 +58,8 @@ import org.osm2world.core.world.data.WorldObjectWithOutline;
 import org.osm2world.core.world.modules.common.ConfigurableWorldModule;
 
 import com.google.common.base.Function;
+import com.vividsolutions.jts.geom.Polygon;
+import com.vividsolutions.jts.simplify.TopologyPreservingSimplifier;
 
 /**
  * adds buildings to the world
@@ -1253,10 +1255,29 @@ public class BuildingModule extends ConfigurableWorldModule {
 		}
 		
 		private class FlatRoof extends HeightfieldRoof {
+				
+			private final PolygonWithHolesXZ roofPoly;
 
+			public FlatRoof() {
+				PolygonWithHolesXZ simplified = polygon;
+				try {
+					Polygon jtsPoly = JTSConversionUtil
+							.polygonXZToJTSPolygon(polygon);
+
+					jtsPoly = (Polygon) TopologyPreservingSimplifier.simplify(
+							jtsPoly, 0.1);
+
+					simplified = JTSConversionUtil
+							.polygonXZFromJTSPolygon(jtsPoly);
+				} catch (Exception e) {
+					System.out.println("flat roof: " + e.getMessage());
+				}
+				roofPoly = simplified;
+			}
+			
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
-				return polygon;
+				return roofPoly;
 			}
 
 			@Override
