@@ -84,9 +84,12 @@ public class OsmosisReader implements OSMDataReader {
 		}
 	};
 	
+	
 	public OsmosisReader(File file) throws IOException {
-		
-		RunnableSource reader = createReaderForFile(file);
+		this(createReaderForFile(file));
+	}
+
+	public OsmosisReader(RunnableSource reader) throws IOException {
 		
 		reader.setSink(sinkImplementation);
 		
