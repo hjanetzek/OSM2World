@@ -2,6 +2,8 @@ package org.osm2world.core.map_data.data;
 
 import java.util.List;
 
+import javax.print.attribute.standard.MediaSize.Other;
+
 import org.osm2world.core.math.LineSegmentXZ;
 import org.osm2world.core.math.VectorXZ;
 
@@ -96,6 +98,10 @@ public class MapSegment {
 	 * returns true if this MapSegment shares a node with a MapArea
 	 */
 	public boolean isConnectedTo(MapArea other) {
+		for (List<MapNode> hole : other.getHoles()){
+			if  (hole.contains(startNode) || hole.contains(endNode))
+					return true;
+		}
 		return other.getBoundaryNodes().contains(startNode)
 			|| other.getBoundaryNodes().contains(endNode);
 	}
