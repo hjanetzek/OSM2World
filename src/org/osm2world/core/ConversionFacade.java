@@ -13,6 +13,7 @@ import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.time.StopWatch;
 import org.openstreetmap.osmosis.core.domain.v0_6.Bound;
+import org.openstreetmap.osmosis.core.task.v0_6.RunnableSource;
 import org.osm2world.core.map_data.creation.HackMapProjection;
 import org.osm2world.core.map_data.creation.MapProjection;
 import org.osm2world.core.map_data.creation.OSMToMapDataConverter;
@@ -255,6 +256,19 @@ public class ConversionFacade {
 		
 		return createRepresentations(osmData, worldModules, config, targets);
 		
+	}
+	
+	
+	public Results createRepresentations(RunnableSource reader,
+			List<WorldModule> worldModules, Configuration config,
+			List<Target<?>> targets) throws IOException {
+
+		OSMData osmData = null;
+			
+		osmData = new OsmosisReader(reader).getData();
+
+		return createRepresentations(osmData, worldModules, config, targets);
+
 	}
 	
 	
