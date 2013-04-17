@@ -41,6 +41,7 @@ import org.osm2world.core.math.TriangleXYZ;
 import org.osm2world.core.math.TriangleXZ;
 import org.osm2world.core.math.VectorXYZ;
 import org.osm2world.core.math.VectorXZ;
+import org.osm2world.core.math.algorithms.JTSSimplifyUtil;
 import org.osm2world.core.math.algorithms.TriangulationUtil;
 import org.osm2world.core.target.RenderableToAllTargets;
 import org.osm2world.core.target.Target;
@@ -58,8 +59,6 @@ import org.osm2world.core.world.data.WorldObjectWithOutline;
 import org.osm2world.core.world.modules.common.ConfigurableWorldModule;
 
 import com.google.common.base.Function;
-import com.vividsolutions.jts.geom.Polygon;
-import com.vividsolutions.jts.simplify.TopologyPreservingSimplifier;
 
 /**
  * adds buildings to the world
@@ -71,7 +70,7 @@ import com.vividsolutions.jts.simplify.TopologyPreservingSimplifier;
  */
 public class BuildingModule extends ConfigurableWorldModule {
 	
-	final static boolean debugComplex = false;
+	final static boolean debugComplex = true;
 
 	@Override
 	public void applyTo(MapData mapData) {
@@ -147,6 +146,11 @@ public class BuildingModule extends ConfigurableWorldModule {
 							subtractPolygons);
 				
 				for (PolygonWithHolesXZ remainingPoly : remainingPolys) {
+					double a = remainingPoly.getArea();
+					if (a < 2){
+						System.out.println("drop remaining " + a);
+						continue;
+					}
 					parts.add(new BuildingPart(this, area, remainingPoly,
 							useBuildingColors, drawBuildingWindows));
 				}
@@ -374,7 +378,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 					renderWalls(target, roof.getPolygon(), false,
 							baseEle, floorHeight, roof);
 				}
-
+//				System.out.println("subtract:" + subtractPolygons.size() + " wrold objects:" + tbWorldObjects.size());
 				/* render building parts above the terrain boundaries */
 				
 				for (TerrainBoundaryWorldObject o : tbWorldObjects) {
@@ -1253,31 +1257,17 @@ public class BuildingModule extends ConfigurableWorldModule {
 			}
 			
 		}
-		
-		private class FlatRoof extends HeightfieldRoof {
-				
-			private final PolygonWithHolesXZ roofPoly;
+		private abstract class SimpleRoof extends HeightfieldRoof {
 
-			public FlatRoof() {
-				PolygonWithHolesXZ simplified = polygon;
-				try {
-					Polygon jtsPoly = JTSConversionUtil
-							.polygonXZToJTSPolygon(polygon);
+			protected final PolygonWithHolesXZ roofPolygon;
 
-					jtsPoly = (Polygon) TopologyPreservingSimplifier.simplify(
-							jtsPoly, 0.1);
-
-					simplified = JTSConversionUtil
-							.polygonXZFromJTSPolygon(jtsPoly);
-				} catch (Exception e) {
-					System.out.println("flat roof: " + e.getMessage());
-				}
-				roofPoly = simplified;
+			public SimpleRoof() {
+				roofPolygon = JTSSimplifyUtil.simplifyPreserveTopology(polygon, 0.1);
 			}
 			
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
-				return roofPoly;
+				return roofPolygon;
 			}
 
 			@Override
@@ -1289,14 +1279,12 @@ public class BuildingModule extends ConfigurableWorldModule {
 			public Collection<LineSegmentXZ> getInnerSegments() {
 				return emptyList();
 			}
-
+		}
+			
+		
+		private class FlatRoof extends SimpleRoof {
 			@Override
-			public double getRoofHeight() {
-				return 0;
-			}
-
-			@Override
-			public Double getRoofEleAt_noInterpolation(VectorXZ pos) {
+			protected Double getRoofEleAt_noInterpolation(VectorXZ pos) {
 				return getMaxRoofEle();
 			}
 			
@@ -1306,9 +1294,13 @@ public class BuildingModule extends ConfigurableWorldModule {
 						+ heightWithoutRoof;
 			}
 			
+			@Override
+			public double getRoofHeight() {
+				return 0;
+			}
 		}
 		
-		private class PyramidalRoof extends HeightfieldRoof {
+		private class PyramidalRoof extends SimpleRoof {
 			
 			private final VectorXZ apex;
 			private final List<LineSegmentXZ> innerSegments;
@@ -1317,7 +1309,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 				super();
 				
-				SimplePolygonXZ outerPoly = polygon.getOuter();
+				SimplePolygonXZ outerPoly = roofPolygon.getOuter();
 				
 				apex = outerPoly.getCentroid();
 				
@@ -1325,14 +1317,8 @@ public class BuildingModule extends ConfigurableWorldModule {
 				for (VectorXZ v : outerPoly.getVertices()) {
 					innerSegments.add(new LineSegmentXZ(v, apex));
 				}
-				
 			}
 			
-			@Override
-			public PolygonWithHolesXZ getPolygon() {
-				return polygon;
-			}
-
 			@Override
 			public Collection<VectorXZ> getInnerPoints() {
 				return singletonList(apex);
@@ -1347,7 +1333,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			public Double getRoofEleAt_noInterpolation(VectorXZ pos) {
 				if (apex.equals(pos)) {
 					return getMaxRoofEle();
-				} else if (polygon.getOuter().getVertices().contains(pos)) {
+				} else if (roofPolygon.getOuter().getVertices().contains(pos)) {
 					return getMaxRoofEle() - roofHeight;
 				} else {
 					return null;
@@ -1356,7 +1342,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 		}
 		
-		private class SkillionRoof extends HeightfieldRoof {
+		private class SkillionRoof extends SimpleRoof {
 			
 			private final LineSegmentXZ ridge;
 			private final double roofLength;
@@ -1378,7 +1364,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 				if (slopeDirection != null) {
 					
 					SimplePolygonXZ simplifiedOuter =
-							polygon.getOuter().getSimplifiedPolygon();
+							roofPolygon.getOuter().getSimplifiedPolygon();
 					
 					/* find ridge by calculating the outermost intersections of
 					 * the quasi-infinite slope "line" towards the centroid vector
@@ -1407,7 +1393,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 					
 					double maxDistance = 0.1;
 					
-					for (VectorXZ v : polygon.getOuter().getVertexLoop()) {
+					for (VectorXZ v : roofPolygon.getOuter().getVertexLoop()) {
 						double distance = distanceFromLine(v, ridge.p1, ridge.p2);
 						if (distance > maxDistance) {
 							maxDistance = distance;
@@ -1426,21 +1412,6 @@ public class BuildingModule extends ConfigurableWorldModule {
 			}
 			
 			@Override
-			public PolygonWithHolesXZ getPolygon() {
-				return polygon;
-			}
-
-			@Override
-			public Collection<LineSegmentXZ> getInnerSegments() {
-				return emptyList();
-			}
-
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
-			}
-
-			@Override
 			protected Double getRoofEleAt_noInterpolation(VectorXZ pos) {
 				if (ridge == null) {
 					return getMaxRoofEle();
@@ -1450,16 +1421,13 @@ public class BuildingModule extends ConfigurableWorldModule {
 					return getMaxRoofEle() - relativeDistance * roofHeight;
 				}
 			}
-			
-			
-			
 		}
 				
 		/**
 		 * tagged roof with a ridge.
 		 * Deals with ridge calculation for various subclasses.
 		 */
-		abstract private class RoofWithRidge extends HeightfieldRoof {
+		abstract private class RoofWithRidge extends SimpleRoof {
 			
 			/** absolute distance of ridge to outline */
 			protected final double ridgeOffset;
@@ -1484,7 +1452,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 				super();
 				
-				SimplePolygonXZ outerPoly = polygon.getOuter();
+				SimplePolygonXZ outerPoly = roofPolygon.getOuter();
 				
 				SimplePolygonXZ simplifiedPolygon =
 					outerPoly.getSimplifiedPolygon();
@@ -1590,20 +1558,15 @@ public class BuildingModule extends ConfigurableWorldModule {
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
 				
-				PolygonXZ newOuter = polygon.getOuter();
+				PolygonXZ newOuter = roofPolygon.getOuter();
 				
 				newOuter = insertIntoPolygon(newOuter, ridge.p1, 0.2);
 				newOuter = insertIntoPolygon(newOuter, ridge.p2, 0.2);
 				
 				return new PolygonWithHolesXZ(
 						newOuter.asSimplePolygon(),
-						polygon.getHoles());
+						roofPolygon.getHoles());
 				
-			}
-			
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
 			}
 			
 			@Override
@@ -1624,16 +1587,6 @@ public class BuildingModule extends ConfigurableWorldModule {
 
 			public HippedRoof() {
 				super(1/3.0);
-			}
-			
-			@Override
-			public PolygonWithHolesXZ getPolygon() {
-				return polygon;
-			}
-			
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
 			}
 			
 			@Override
@@ -1684,7 +1637,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
 				
-				PolygonXZ newOuter = polygon.getOuter();
+				PolygonXZ newOuter = roofPolygon.getOuter();
 				
 				newOuter = insertIntoPolygon(newOuter, cap1part.p1, 0.2);
 				newOuter = insertIntoPolygon(newOuter, cap1part.p2, 0.2);
@@ -1693,13 +1646,8 @@ public class BuildingModule extends ConfigurableWorldModule {
 				
 				return new PolygonWithHolesXZ(
 						newOuter.asSimplePolygon(),
-						polygon.getHoles());
+						roofPolygon.getHoles());
 				
-			}
-			
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
 			}
 			
 			@Override
@@ -1753,7 +1701,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
 				
-				PolygonXZ newOuter = polygon.getOuter();
+				PolygonXZ newOuter = roofPolygon.getOuter();
 
 				newOuter = insertIntoPolygon(newOuter, ridge.p1, 0.2);
 				newOuter = insertIntoPolygon(newOuter, ridge.p2, 0.2);
@@ -1766,13 +1714,8 @@ public class BuildingModule extends ConfigurableWorldModule {
 				
 				return new PolygonWithHolesXZ(
 						newOuter.asSimplePolygon(),
-						polygon.getHoles());
+						roofPolygon.getHoles());
 				
-			}
-			
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
 			}
 			
 			@Override
@@ -1838,7 +1781,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			@Override
 			public PolygonWithHolesXZ getPolygon() {
 
-				PolygonXZ newOuter = polygon.getOuter();
+				PolygonXZ newOuter = roofPolygon.getOuter();
 
 				newOuter = insertIntoPolygon(newOuter, ridge.p1, 0.2);
 				newOuter = insertIntoPolygon(newOuter, ridge.p2, 0.2);
@@ -1848,17 +1791,13 @@ public class BuildingModule extends ConfigurableWorldModule {
 					newOuter = insertIntoPolygon(newOuter, capPart.p2, 0.2);
 				}
 
-				//TODO: add intersections of additional edges with outline?
+				//TODO: add intersections of additional edges with outline? <- ???
 				return new PolygonWithHolesXZ(
 						newOuter.asSimplePolygon(),
-						polygon.getHoles());
+						roofPolygon.getHoles());
 
 			}
 
-			@Override
-			public Collection<VectorXZ> getInnerPoints() {
-				return emptyList();
-			}
 			@Override
 			public Collection<LineSegmentXZ> getInnerSegments() {
 
@@ -1910,11 +1849,6 @@ public class BuildingModule extends ConfigurableWorldModule {
 						interpolateBetween(cap1.p2, ridge.p1, 1/3.0),
 						interpolateBetween(cap2.p1, ridge.p2, 1/3.0));
 				
-			}
-			
-			@Override
-			public PolygonWithHolesXZ getPolygon() {
-				return polygon;
 			}
 			
 			@Override
@@ -1980,7 +1914,12 @@ public class BuildingModule extends ConfigurableWorldModule {
 				
 				ridgeAndEdgeSegments = new ArrayList<LineSegmentXZ>();
 				
-				List<MapNode> nodes = area.getBoundaryNodes();
+				HashSet<MapNode> nodes = new HashSet<MapNode>();
+				
+				nodes.addAll(area.getBoundaryNodes());
+					
+				for (List<MapNode> h : area.getHoles())
+					nodes.addAll(h);
 				
 				if (area.getTags().containsKey("roof:height"))
 					roofHeight = parseMeasure(area.getTags().getValue("roof:height"));
@@ -2009,7 +1948,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 						boolean containsStart = nodes.contains(waySegment.getStartNode());
 						boolean containsEnd = nodes.contains(waySegment.getEndNode());
 
-						if (!inside && !(containsStart && containsEnd))
+						if (!(inside || containsStart || containsEnd))
 							continue;
 
 						if (isEdge)
