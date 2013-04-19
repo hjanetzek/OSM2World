@@ -70,7 +70,7 @@ import com.google.common.base.Function;
  */
 public class BuildingModule extends ConfigurableWorldModule {
 	
-	final static boolean debugComplex = true;
+	final static boolean debugComplex = false;
 
 	@Override
 	public void applyTo(MapData mapData) {
@@ -86,8 +86,7 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 			if (buildingValue != null && !buildingValue.equals("no")) {
 				
-				Building building = new Building(area,
-						useBuildingColors, drawBuildingWindows);
+				Building building = new Building(area, useBuildingColors, drawBuildingWindows);
 				area.addRepresentation(building);
 								
 			}
@@ -1177,7 +1176,6 @@ public class BuildingModule extends ConfigurableWorldModule {
 				if (ele != null) {
 					return ele;
 				} else {
-					
 					// get all segments from the roof
 					
 					//TODO (performance): avoid doing this for every node
@@ -1243,13 +1241,11 @@ public class BuildingModule extends ConfigurableWorldModule {
 							withRoofEle(tCCW.v3)));
 					//TODO: avoid duplicate objects for points in more than one triangle
 				}
-								
 				/* draw triangles */
 				
 				target.drawTriangles(materialRoof, trianglesXYZ,
 						slopedFaceTexCoordLists(
 								trianglesXYZ, materialRoof));
-				
 			}
 			
 			private VectorXYZ withRoofEle(VectorXZ v) {
@@ -1283,9 +1279,15 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 		
 		private class FlatRoof extends SimpleRoof {
+			
+			private Double ele;
+			
 			@Override
 			protected Double getRoofEleAt_noInterpolation(VectorXZ pos) {
-				return getMaxRoofEle();
+				if (ele == null)
+					ele = getMaxRoofEle();
+				
+				return ele;
 			}
 			
 			@Override
@@ -1902,7 +1904,8 @@ public class BuildingModule extends ConfigurableWorldModule {
 			private final Map<VectorXZ, Double> roofHeightMap;
 			private PolygonWithHolesXZ simplePolygon;
 			private final Collection<LineSegmentXZ> ridgeAndEdgeSegments;
-			
+			private Double ele;
+
 			public ComplexRoof() {
 
 				/* find ridge and/or edges
@@ -2109,8 +2112,9 @@ public class BuildingModule extends ConfigurableWorldModule {
 			@Override
 			public Double getRoofEleAt_noInterpolation(VectorXZ pos) {
 				if (roofHeightMap.containsKey(pos)) {
-					return building.getArea().getElevationProfile().getMinEle()
-						+ heightWithoutRoof + roofHeightMap.get(pos);
+					if (ele == null)
+						ele = building.getArea().getElevationProfile().getMinEle() + heightWithoutRoof;
+					return ele + roofHeightMap.get(pos);
 				} else {
 					return null;
 				}
@@ -2118,8 +2122,10 @@ public class BuildingModule extends ConfigurableWorldModule {
 			
 			@Override
 			public double getMaxRoofEle() {
-				return building.getArea().getElevationProfile().getMinEle()
-					+ heightWithoutRoof + roofHeight;
+				if (ele == null)
+					ele = building.getArea().getElevationProfile().getMinEle() + heightWithoutRoof;
+				
+				return ele + roofHeight;
 			}
 			
 		}
