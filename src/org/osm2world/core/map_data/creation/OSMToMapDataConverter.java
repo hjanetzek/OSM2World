@@ -335,11 +335,11 @@ public class OSMToMapDataConverter {
 				
 				intersects = false;
 			
-				double segmentLength = distance(segment.p1, segment.p2);
+				double segmentLength = distance(segment.p1, segment.p2) / 100;
 				
 				for (VectorXZ pos : polygon.intersectionPositions(segment)) {
-					if (distance(pos, segment.p1) > segmentLength / 100
-							&& distance(pos, segment.p2) > segmentLength / 100) {
+					if (distance(pos, segment.p1) > segmentLength
+							&& distance(pos, segment.p2) > segmentLength) {
 						intersects = true;
 						break;
 					}
@@ -429,8 +429,10 @@ public class OSMToMapDataConverter {
 			
 			intersects = false;
 			
+			Collection<VectorXZ> intersectionPos = polygon1.intersectionPositions(polygon2);
+			
 			intersectionPosCheck:
-			for (VectorXZ pos : polygon1.intersectionPositions(polygon2)) {
+			for (VectorXZ pos : intersectionPos) {
 				boolean trueIntersection = true;
 				for (VectorXZ commonNode : commonNodes) {
 					if (distance(pos, commonNode) < 0.01) {

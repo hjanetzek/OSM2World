@@ -107,22 +107,51 @@ public class PolygonWithHolesXZ {
 	}
 
 	public List<VectorXZ> intersectionPositions(LineSegmentXZ lineSegment) {
-		List<VectorXZ> intersectionPositions = new ArrayList<VectorXZ>();
+		List<VectorXZ> intersectionPositions = null;
+		
 		for (SimplePolygonXZ hole : holes) {
-			intersectionPositions.addAll(hole.intersectionPositions(lineSegment));
+			List<VectorXZ> positions = hole.intersectionPositions(lineSegment);
+			if (!positions.isEmpty()){
+				if (intersectionPositions == null)
+					intersectionPositions = new ArrayList<VectorXZ>();
+				
+				intersectionPositions.addAll(positions);
+			}
 		}
-		intersectionPositions.addAll(outerPolygon.intersectionPositions(lineSegment));
+		
+		List<VectorXZ> positions = outerPolygon.intersectionPositions(lineSegment);
+		
+		if (!positions.isEmpty()){
+			if (intersectionPositions == null)
+				intersectionPositions = new ArrayList<VectorXZ>();
+			
+			intersectionPositions.addAll(positions);
+		}
+
+		if(intersectionPositions == null)
+			return Collections.<VectorXZ>emptyList();
+		
 		return intersectionPositions;
 	}
 
+	// return all segments of p2 ???
 	public Collection<VectorXZ> intersectionPositions(PolygonWithHolesXZ p2) {
-		List<VectorXZ> intersectionPositions = new ArrayList<VectorXZ>();
+		List<VectorXZ> intersectionPositions = null;
+		
 		for (SimplePolygonXZ simplePoly : p2.getPolygons()) {
+			
 			for (LineSegmentXZ lineSegment : simplePoly.getSegments()) {
+			
+				if (intersectionPositions == null)
+					intersectionPositions = new ArrayList<VectorXZ>();
+				
 				intersectionPositions.addAll(
 						intersectionPositions(lineSegment));
 			}
 		}
+		if (intersectionPositions == null)
+			return Collections.<VectorXZ>emptyList();
+		
 		return intersectionPositions;
 	}
 	

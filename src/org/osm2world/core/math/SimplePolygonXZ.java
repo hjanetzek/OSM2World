@@ -46,8 +46,13 @@ public class SimplePolygonXZ extends PolygonXZ {
 	
 	public List<LineSegmentXZ> getSegments() {
 		List<LineSegmentXZ> segments = new ArrayList<LineSegmentXZ>(vertexLoop.size());
-		for (int i=0; i+1 < vertexLoop.size(); i++) {
-			segments.add(new LineSegmentXZ(vertexLoop.get(i), vertexLoop.get(i+1)));
+		VectorXZ cur, next;
+		cur = vertexLoop.get(0);
+		
+		for (int i = 0, size = vertexLoop.size() - 1; i < size; i++, cur = next) {
+			next = vertexLoop.get(i + 1);
+			
+			segments.add(new LineSegmentXZ(cur, next));
 		}
 		return segments;
 	}
@@ -183,17 +188,26 @@ public class SimplePolygonXZ extends PolygonXZ {
 	 */
 	public static boolean contains(List<VectorXZ> polygonVertexLoop, VectorXZ test) {
 	
-		assertLoopProperty(polygonVertexLoop);
+		// not required(here) according to http://www.ecse.rpi.edu/~wrf/Research/Short_Notes/pnpoly.html
+		//assertLoopProperty(polygonVertexLoop);
 		
-		int i, j;
 		boolean c = false;
+		// this assumes that the loop is closed
+		int size = polygonVertexLoop.size() - 1;
+		VectorXZ vertI;
+		VectorXZ vertJ;
 
-		for (i = 0, j = polygonVertexLoop.size() - 1; i < polygonVertexLoop.size(); j = i++) {
-			if (((polygonVertexLoop.get(i).z > test.z) != (polygonVertexLoop.get(j).z > test.z))
-					&& (test.x < (polygonVertexLoop.get(j).x - polygonVertexLoop.get(i).x)
-							* (test.z - polygonVertexLoop.get(i).z)
-							/ (polygonVertexLoop.get(j).z - polygonVertexLoop.get(i).z) + polygonVertexLoop.get(i).x))
+		vertJ = polygonVertexLoop.get(size - 1);
+
+		for (int i = 0; i < size; i++) {
+			vertI = polygonVertexLoop.get(i);
+			
+			if (((vertI.z > test.z) != (vertJ.z > test.z))
+					&& (test.x < (vertJ.x - vertI.x) * (test.z - vertI.z)
+							/ (vertJ.z - vertI.z) + vertI.x))
 				c = !c;
+			
+			vertJ = vertI;
 		}
 
 		return c;

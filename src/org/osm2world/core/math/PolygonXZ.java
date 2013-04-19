@@ -123,17 +123,17 @@ public class PolygonXZ {
 	public boolean intersects(VectorXZ segmentP1, VectorXZ segmentP2) {
 		//TODO: (performance): passing "vector TO second point", rather than point2, would avoid having to calc it here - and that information could be reused for all comparisons involving the segment
 
-		for (int i=0; i+1<vertexLoop.size(); i++) {
-			
+		VectorXZ cur, next;
+		cur = vertexLoop.get(0);
+		
+		for (int i=0, size = vertexLoop.size() - 1; i < size; i++, cur = next) {
+			next = vertexLoop.get(i+1);
 			VectorXZ intersection = GeometryUtil.getTrueLineSegmentIntersection(
-					segmentP1, segmentP2,
-					vertexLoop.get(i), vertexLoop.get(i+1)
-					);
+					segmentP1, segmentP2, cur, next);
 			
 			if (intersection != null) {
 				return true;
 			}
-			
 		}
 		
 		return false;
@@ -150,9 +150,12 @@ public class PolygonXZ {
 	public boolean intersects(PolygonXZ outlinePolygonXZ) {
 
 		//TODO (performance): currently performs pairwise intersection checks for sides of this and other - this might not be the fastest method
+		VectorXZ cur, next;
+		cur = vertexLoop.get(0);
 		
-		for (int i=0; i+1<vertexLoop.size(); i++) {
-			if (outlinePolygonXZ.intersects(vertexLoop.get(i), vertexLoop.get(i+1))) {
+		for (int i=0, size = vertexLoop.size() - 1; i < size; i++, cur = next) {
+			next = vertexLoop.get(i+1);
+			if (outlinePolygonXZ.intersects(cur, next)) {
 				return true;
 			}
 		}
@@ -163,8 +166,8 @@ public class PolygonXZ {
 	public Collection<LineSegmentXZ> intersectionSegments(
 			LineSegmentXZ lineSegment) {
 
-		List<LineSegmentXZ> intersectionSegments = new ArrayList<LineSegmentXZ>();
-
+		List<LineSegmentXZ> intersectionSegments = null;
+		
 		for (LineSegmentXZ polygonSegment : getSegments()) {
 			
 			VectorXZ intersection = GeometryUtil.getTrueLineSegmentIntersection(
@@ -173,35 +176,45 @@ public class PolygonXZ {
 					);
 			
 			if (intersection != null) {
+				if (intersectionSegments == null)
+					intersectionSegments = new ArrayList<LineSegmentXZ>();
+
 				intersectionSegments.add(polygonSegment);
 			}
-			
 		}
+
+		if (intersectionSegments == null)
+			return Collections.emptyList();
 		
 		return intersectionSegments;
-		
 	}
 
 	public List<VectorXZ> intersectionPositions(
 			LineSegmentXZ lineSegment) {
 		
-		List<VectorXZ> intersectionPositions = new ArrayList<VectorXZ>();
-
-		for (int i=0; i+1<vertexLoop.size(); i++) {
+		List<VectorXZ> intersectionPositions = null;
+		
+		VectorXZ cur = vertexLoop.get(0);
+		VectorXZ next;
+		
+		for (int i=0, n = vertexLoop.size(); i+1< n; i++, cur = next) {
+			next = vertexLoop.get(i + 1);
 			
 			VectorXZ intersection = GeometryUtil.getTrueLineSegmentIntersection(
-					lineSegment.p1, lineSegment.p2,
-					vertexLoop.get(i), vertexLoop.get(i+1)
-					);
+					lineSegment.p1, lineSegment.p2,	cur, next);
 			
 			if (intersection != null) {
+				if (intersectionPositions == null)
+					intersectionPositions = new ArrayList<VectorXZ>();
+
 				intersectionPositions.add(intersection);
 			}
-			
 		}
+
+		if (intersectionPositions == null)
+			return Collections.emptyList();
 		
 		return intersectionPositions;
-		
 	}
 	
 	/**
@@ -216,24 +229,32 @@ public class PolygonXZ {
 	 * is self-intersecting
 	 */
 	public static boolean isSelfIntersecting(List<VectorXZ> polygonVertexLoop) {
-		
-		for (int i=0; i+1 < polygonVertexLoop.size(); i++) {
-			for (int j=i+1; j+1 < polygonVertexLoop.size(); j++) {
 
-				VectorXZ intersection = GeometryUtil.getTrueLineSegmentIntersection(
-						polygonVertexLoop.get(i), polygonVertexLoop.get(i+1),
-						polygonVertexLoop.get(j), polygonVertexLoop.get(j+1)
-						);
-				
+		VectorXZ cur1 = polygonVertexLoop.get(0);
+		VectorXZ next1;
+		VectorXZ cur2;
+		VectorXZ next2;
+
+		for (int i = 0, size = polygonVertexLoop.size() - 1; i < size; i++) {
+			next1 = polygonVertexLoop.get(i + 1);
+			
+			int j = i + 1;
+			cur2 = polygonVertexLoop.get(j);
+			
+			for (; j < size; j++) {
+				next2 = polygonVertexLoop.get(j + 1);
+
+				VectorXZ intersection = GeometryUtil
+						.getTrueLineSegmentIntersection(cur1, next1, cur2, next2);
+
 				if (intersection != null) {
 					return true;
 				}
-				
+				cur2 = next2;
 			}
+			cur1 = next1;
 		}
-		
 		return false;
-		
 	}
 	
 
