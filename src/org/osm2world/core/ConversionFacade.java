@@ -14,7 +14,6 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.lang.time.StopWatch;
 import org.openstreetmap.osmosis.core.domain.v0_6.Bound;
 import org.openstreetmap.osmosis.core.task.v0_6.RunnableSource;
-import org.osm2world.core.map_data.creation.HackMapProjection;
 import org.osm2world.core.map_data.creation.MapProjection;
 import org.osm2world.core.map_data.creation.OSMToMapDataConverter;
 import org.osm2world.core.map_data.creation.OriginMapProjection;
@@ -30,6 +29,7 @@ import org.osm2world.core.map_elevation.creation.ZeroInterpolator;
 import org.osm2world.core.map_elevation.data.EleConnector;
 import org.osm2world.core.math.VectorXYZ;
 import org.osm2world.core.osm.creation.JOSMFileHack;
+import org.osm2world.core.osm.creation.OSMDataReader;
 import org.osm2world.core.osm.creation.OsmosisReader;
 import org.osm2world.core.osm.data.OSMData;
 import org.osm2world.core.target.Renderable;
@@ -149,7 +149,8 @@ public class ConversionFacade {
 	}
 
 	private Factory<? extends OriginMapProjection> mapProjectionFactory =
-		new DefaultFactory<HackMapProjection>(HackMapProjection.class);
+ new DefaultFactory<OriginMapProjection>(
+			OriginMapProjection.class);
 	
 	private Factory<? extends TerrainInterpolator> terrainEleInterpolatorFactory =
 		new DefaultFactory<LeastSquaresInterpolator>(LeastSquaresInterpolator.class);
@@ -216,7 +217,7 @@ public class ConversionFacade {
 			throw new IllegalArgumentException("osmFile must not be null");
 		}
 		
-		OSMData osmData = null;
+		OSMDataReader osmDataReader = null;
 		boolean useJOSMHack = false;
 		
 		if (JOSMFileHack.isJOSMGenerated(osmFile)) {
@@ -226,7 +227,7 @@ public class ConversionFacade {
 			/* try to read file using Osmosis */
 			
 			try {
-				osmData = new OsmosisReader(osmFile).getData();
+				osmDataReader = new OsmosisReader(osmFile);
 			} catch (IOException e) {
 				
 				System.out.println("could not read file," +
@@ -250,11 +251,11 @@ public class ConversionFacade {
 						" (not even with workaround for JOSM files)", e2);
 			}
 			
-			osmData = new OsmosisReader(tempFile).getData();
+			osmDataReader = new OsmosisReader(tempFile);
 			
 		}
 		
-		return createRepresentations(osmData, worldModules, config, targets);
+		return createRepresentations(osmDataReader, worldModules, config, targets);
 		
 	}
 	
@@ -262,14 +263,25 @@ public class ConversionFacade {
 	public Results createRepresentations(RunnableSource reader,
 			List<WorldModule> worldModules, Configuration config,
 			List<Target<?>> targets) throws IOException {
-
-		OSMData osmData = null;
-			
-		osmData = new OsmosisReader(reader).getData();
-
-		return createRepresentations(osmData, worldModules, config, targets);
+		long start = System.currentTimeMillis();
+		
+		OSMDataReader osmDataReader = new OsmosisReader(reader);
+		
+		System.out.println("read took " + (System.currentTimeMillis() - start));
+		return createRepresentations(osmDataReader, worldModules, config, targets);
 
 	}
+
+//	public Results createRepresentations(OSMDataReader osmDataReader,
+//			List<WorldModule> worldModules, Configuration config,
+//			List<Target<?>> targets) throws IOException {
+//		long start = System.currentTimeMillis();
+//		
+//		
+//		System.out.println("read took " + (System.currentTimeMillis() - start));
+//		return createRepresentations(osmDataReader, worldModules, config, targets);
+//
+//	}
 	
 	
 	/**
@@ -289,13 +301,17 @@ public class ConversionFacade {
 	 * 
 	 * @throws BoundingBoxSizeException  for oversized bounding boxes
 	 */
-	public Results createRepresentations(OSMData osmData,
+	public Results createRepresentations(OSMDataReader osmDataReader,
 			List<WorldModule> worldModules, Configuration config,
 			List<Target<?>> targets)
 			throws IOException, BoundingBoxSizeException {
 		
 		/* check the inputs */
+
+		/* create map data from OSM data */
+		updatePhase(Phase.READ_DATA);
 		
+		OSMData osmData = osmDataReader.getData();
 		if (osmData == null) {
 			throw new IllegalArgumentException("osmData must not be null");
 		}
@@ -317,14 +333,20 @@ public class ConversionFacade {
 		/* create map data from OSM data */
 		updatePhase(Phase.MAP_DATA);
 		
+		// <<<<<<< HEAD
 		OriginMapProjection mapProjection = mapProjectionFactory.make();
 		mapProjection.setOrigin(osmData);
 		
+		// =======
+		// MapProjection mapProjection = new HackMapProjection(config, osmData);
+		// >>>>>>> c963987... using custom json parser for Overpass-API, not
+		// faster than xml but works also without meta-data...
+
 		OSMToMapDataConverter converter = new OSMToMapDataConverter(mapProjection);
 		MapData mapData = converter.createMapData(osmData);
 		
 		/* apply world modules */
-		updatePhase(Phase.REPRESENTATION);
+		updatePhase(Phase.MATERIALS);
 		
 		if (worldModules == null) {
 			worldModules = createDefaultModuleList();
@@ -333,6 +355,7 @@ public class ConversionFacade {
 		Materials.configureMaterials(config);
 			//this will cause problems if multiple conversions are run
 			//at the same time, because global variables are being modified
+		updatePhase(Phase.REPRESENTATION);
 		
 		WorldCreator moduleManager =
 			new WorldCreator(config, worldModules);
@@ -468,7 +491,9 @@ public class ConversionFacade {
 	}
 	
 	public static enum Phase {
+		READ_DATA,
 		MAP_DATA,
+		MATERIALS,
 		REPRESENTATION,
 		ELEVATION,
 		TERRAIN,
