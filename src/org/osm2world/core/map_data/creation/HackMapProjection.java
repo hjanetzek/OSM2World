@@ -1,14 +1,10 @@
 package org.osm2world.core.map_data.creation;
 
-import java.awt.geom.Point2D;
-
+import org.apache.commons.configuration.Configuration;
 import org.openstreetmap.osmosis.core.domain.v0_6.Bound;
 import org.osm2world.core.math.VectorXZ;
 import org.osm2world.core.osm.data.OSMData;
 import org.osm2world.core.osm.data.OSMNode;
-
-import com.jhlabs.map.proj.MercatorProjection;
-import com.jhlabs.map.proj.Projection;
 
 /**
  * quick-and-dirty projection that is intended to use the "dense" space
@@ -16,8 +12,30 @@ import com.jhlabs.map.proj.Projection;
  * represented by 1 internal unit
  */
 public class HackMapProjection implements MapProjection {
-	
-	private final Projection projection = new MercatorProjection();
+
+	static class MercatorProjection{
+		
+		public static final double LATITUDE_MAX = 85.05112877980659;
+		public static final double LATITUDE_MIN = -LATITUDE_MAX;
+
+    	public static double latitudeToY(double latitude) {
+    		double sinLatitude = Math.sin(latitude * (Math.PI / 180));
+    		return  360 * Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI);
+    		//return Math.log(Math.tan((Math.PI / 4) + 0.5 * latitude));
+    	}
+
+    	public static double toLatitude(double y) {
+    		return 360 * -Math.atan(Math.exp((y - 0.5) * (2 * Math.PI))) / Math.PI;
+    	}
+    	
+    	public static double longitudeToX(double longitude) {
+    		return longitude;
+    	}
+
+    	public static double toLongitude(double x) {
+    		return x;
+    	}	
+	}
 	
 	/**
 	 * The coordinate origin is placed at the center of the bounds,
@@ -28,50 +46,62 @@ public class HackMapProjection implements MapProjection {
 	 * 
 	 * //TODO: replace this solution later
 	 */
+	
 	private final Double originLat, originLon;
 
-	/* magic constant */
-	public static final double SCALE_X = 70000;
-	public static final double SCALE_Y = 110000;
+	public static final double EARTH_CIRCUMFERENCE_E = 40075016.686;
+	public static final double EARTH_CIRCUMFERENCE_M = 40007860.000;
 	
-	public HackMapProjection(OSMData osmData) {
+	public final double SCALE_X;
+	public final double SCALE_Y;
+
+	/* magic constant */
+	//public static final double SCALE_X = 70000;
+	//public static final double SCALE_Y = 110000;
+	
+	public HackMapProjection(Configuration config, OSMData osmData) {
 		
-		if (osmData.getBounds() != null && !osmData.getBounds().isEmpty()) {
+		double latitude;
+		double longitude;
+		
+		if (config.containsKey("MapCenterLat") && config.containsKey("MapCenterLon")){
+			latitude = config.getDouble("MapCenterLat", 0);
+			longitude = config.getDouble("MapCenterLon", 0);
+			
+		} else if (osmData.getBounds() != null && !osmData.getBounds().isEmpty()) {
 			
 			Bound firstBound = osmData.getBounds().iterator().next();
-			originLat = (firstBound.getTop() + firstBound.getBottom()) / 2;
-			originLon = (firstBound.getLeft() + firstBound.getRight()) / 2;
-			
+			latitude = (firstBound.getTop() + firstBound.getBottom()) / 2;
+			longitude = (firstBound.getLeft() + firstBound.getRight()) / 2;
 		} else {
-			
 			if (osmData.getNodes().isEmpty()) {
 				throw new IllegalArgumentException("OSM data must contain nodes");
 			}
 			OSMNode firstNode = osmData.getNodes().iterator().next();
-			originLat = firstNode.lat;
-			originLon = firstNode.lon;
-			
+			latitude = firstNode.lat;
+			longitude = firstNode.lon;
 		}
+		
+		double groundResolution = Math.cos(latitude * (Math.PI / 180));
+		
+		SCALE_X = (groundResolution * EARTH_CIRCUMFERENCE_E) / 360;
+		SCALE_Y = (groundResolution * EARTH_CIRCUMFERENCE_M) / 360;
+		
+		originLat = MercatorProjection.latitudeToY(latitude);
+		originLon = MercatorProjection.longitudeToX(longitude);
 	}
 
 	public VectorXZ calcPos(double lat, double lon) {
-				
-		lat -= originLat;
-		lon -= originLon;
 		
-//		return new VectorXZ(
-//				(float)conversion.MercatorProjection.lonToX(lon),
-//				(float)conversion.MercatorProjection.latToY(lat)
-//		);
-		
-		//TODO: maybe remove this projection code and the associated LIB?
-		
-		Point2D.Double point = new Point2D.Double();
-		if (Double.isNaN(projection.project(lon, lat, point).y * SCALE_Y)) {
+		if (lat > MercatorProjection.LATITUDE_MAX || lat < MercatorProjection.LATITUDE_MIN){
 			System.out.println("NaN!");
+			return new VectorXZ(0, 0);
 		}
-		projection.project(lon, lat, point);
-		return new VectorXZ(point.x * SCALE_X, point.y * SCALE_Y); //x and z(!) are 2d here
+
+		lon = MercatorProjection.longitudeToX(lon) - originLon;
+		lat = MercatorProjection.latitudeToY(lat) - originLat;
+
+		return new VectorXZ(lon * SCALE_X, lat * SCALE_Y);
 		
 	}
 	
