@@ -11,7 +11,6 @@ import org.osm2world.core.map_data.data.MapArea;
 import org.osm2world.core.map_data.data.MapElement;
 import org.osm2world.core.map_data.data.MapNode;
 import org.osm2world.core.map_data.data.MapWaySegment;
-import org.osm2world.core.math.TriangleXYZ;
 import org.osm2world.core.math.TriangleXYZWithNormals;
 import org.osm2world.core.math.VectorXYZ;
 import org.osm2world.core.math.VectorXZ;
@@ -37,12 +36,12 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 	
 	private Material currentMaterial = null;
 	private static int anonymousMaterialCounter = 0;
-	
+	private StringBuffer buf;
+
 	public ObjTarget(PrintStream objStream, PrintStream mtlStream) {
 		
 		this.objStream = objStream;
 		this.mtlStream = mtlStream;
-				
 	}
 	
 	@Override
@@ -62,25 +61,26 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 
 	@Override
 	public void beginObject(WorldObject object) {
+		if (buf != null){
+			objStream.print(buf);
+		}
+		
+		buf = new StringBuffer(8192);
 		
 		if (object == null) {
-			
 			currentWOGroup = null;
-			objStream.println("g null");
-			objStream.println("o null");
-			
+			buf.append("g null\no null\n");
 		} else {
-			
 			/* maybe start a group depending on the object's class */
-			
 			if (!object.getClass().equals(currentWOGroup)) {
 				currentWOGroup = object.getClass();
-				objStream.println("g " + currentWOGroup.getSimpleName());
+				buf.append("g ");
+				buf.append(currentWOGroup.getSimpleName());
+				buf.append('\n');
 			}
 			
 			/* start an object with the object's class
 			 * and the underlying OSM element's name/ref tags */
-			
 			MapElement element = object.getPrimaryMapElement();
 			OSMElement osmElement;
 			if (element instanceof MapNode) {
@@ -93,17 +93,30 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 				osmElement = null;
 			}
 			
+			buf.append("o ");
+			buf.append(object.getClass().getSimpleName());
+			buf.append(' ');				
+
 			if (osmElement != null && osmElement.tags.containsKey("name")) {
-				objStream.println("o " + object.getClass().getSimpleName() + " " + osmElement.tags.getValue("name"));
+				buf.append(osmElement.tags.getValue("name"));
 			} else if (osmElement != null && osmElement.tags.containsKey("ref")) {
-				objStream.println("o " + object.getClass().getSimpleName() + " " + osmElement.tags.getValue("ref"));
+				buf.append(osmElement.tags.getValue("ref"));
 			} else {
-				objStream.println("o " + object.getClass().getSimpleName() + anonymousWOCounter ++);
+				buf.append(anonymousWOCounter ++);				
 			}
-			
+			buf.append('\n');
 		}
 		
 	}
+	
+	@Override
+	public void finish() {
+		if (buf != null){
+			System.out.println("finish object: " + buf.length());
+			objStream.print(buf);
+		}
+		super.finish();
+	};
 	
 	@Override
 	public void drawFace(Material material, List<VectorXYZ> vs,
@@ -165,8 +178,9 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 				writeMaterial(material, name);
 			}
 			
-			objStream.println("usemtl " + name);
-			
+			buf.append("usemat ");
+			buf.append(name);
+			buf.append('\n');
 		}
 	}
 	
@@ -192,7 +206,22 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 			Integer index = indexMap.get(v);
 			if (index == null) {
 				index = indexMap.size();
-				objStream.println(objLineStart + " " + formatVector(v));
+				buf.append(objLineStart);
+				if (v instanceof VectorXYZ) {
+					VectorXYZ vXYZ = (VectorXYZ)v;
+					appendDouble(vXYZ.x, buf);
+					buf.append(' ');
+					appendDouble(vXYZ.y, buf);
+					buf.append(' ');
+					appendDouble(-vXYZ.z, buf);
+				}
+				else{
+					VectorXZ vXZ = (VectorXZ)v;
+					appendDouble(vXZ.x, buf);
+					buf.append(' ');
+					appendDouble(-vXZ.z, buf);					
+				}
+				buf.append('\n');
 				indexMap.put(v, index);
 			}
 			indices[i] = index;
@@ -202,42 +231,36 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 		
 	}
 	
-	private String formatVector(Object v) {
-		
-		if (v instanceof VectorXYZ) {
-			VectorXYZ vXYZ = (VectorXYZ)v;
-			return vXYZ.x + " " + vXYZ.y + " " + (-vXYZ.z);
-		} else {
-			VectorXZ vXZ = (VectorXZ)v;
-			return vXZ.x + " " + vXZ.z;
-		}
-		
-	}
+
 
 	private void writeFace(int[] vertexIndices, int[] normalIndices,
 			int[] texCoordIndices) {
 
 		assert normalIndices == null
 				|| vertexIndices.length == normalIndices.length;
+		
 
-		objStream.print("f");
-
+		buf.append('f');
+		
 		for (int i = 0; i < vertexIndices.length; i++) {
-
-			objStream.print(" " + (vertexIndices[i]+1));
-
+			buf.append(' ');
+			buf.append(vertexIndices[i]+1);
+			
 			if (texCoordIndices != null && normalIndices == null) {
-				objStream.print("/" + (texCoordIndices[i]+1));
+				buf.append('/');
+				buf.append(texCoordIndices[i]+1);
 			} else if (texCoordIndices == null && normalIndices != null) {
-				objStream.print("//" + (normalIndices[i]+1));
+				buf.append("//");
+				buf.append(normalIndices[i]+1);
 			} else if (texCoordIndices != null && normalIndices != null) {
-				objStream.print("/" + (texCoordIndices[i]+1)
-						+ "/" + (normalIndices[i]+1));
+				buf.append('/');
+				buf.append(texCoordIndices[i]+1);
+				buf.append('/');
+				buf.append(normalIndices[i]+1);
 			}
-
 		}
-
-		objStream.println();
+		
+		buf.append('\n');
 	}
 	
 	private void writeMaterial(Material material, String name) {
@@ -268,5 +291,23 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 				+ " " + color.getBlue() / 255f);
 		
 	}
+	
+	private static final int POW10[] = {1, 10, 100, 1000, 10000, 100000, 1000000};
 
+	public static void appendDouble(double val, StringBuffer sb) {
+		int precision = 4;
+
+		if (val < 0) {
+			sb.append('-');
+			val = -val;
+		}
+		int exp = POW10[precision];
+		long lval = (long) (val * exp + 0.5);
+		sb.append(lval / exp).append('.');
+		long fval = lval % exp;
+		for (int p = precision - 1; p > 0 && fval < POW10[p]; p--) {
+			sb.append('0');
+		}
+		sb.append(fval);
+	}
 }
