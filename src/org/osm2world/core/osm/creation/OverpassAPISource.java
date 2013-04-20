@@ -16,16 +16,19 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-import org.apache.xerces.impl.dv.util.Base64;
 import org.openstreetmap.osmosis.core.OsmosisRuntimeException;
 import org.openstreetmap.osmosis.core.container.v0_6.BoundContainer;
 import org.openstreetmap.osmosis.core.domain.v0_6.Bound;
 import org.openstreetmap.osmosis.core.task.v0_6.RunnableSource;
 import org.openstreetmap.osmosis.core.task.v0_6.Sink;
 import org.openstreetmap.osmosis.core.util.MultiMemberGZIPInputStream;
-import org.openstreetmap.osmosis.xml.v0_6.impl.OsmHandler;
+import org.openstreetmap.osmosis.xml.common.ElementProcessor;
+import org.openstreetmap.osmosis.xml.v0_6.impl.OsmElementProcessor;
+import org.xml.sax.Attributes;
+import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
+import org.xml.sax.helpers.DefaultHandler;
 
 
 /**
@@ -36,8 +39,9 @@ import org.xml.sax.SAXParseException;
  */
 public class OverpassAPISource implements RunnableSource {
 	
-	private static final String OVERPASS_API = "http://overpass-api.de/api/interpreter";
+	//private static final String OVERPASS_API = "http://overpass-api.de/api/interpreter";
 	
+	private static final String OVERPASS_API = "http://city.informatik.uni-bremen.de/oapi/interpreter";
     /**
      * The http-response-code for OK.
      */
@@ -144,6 +148,7 @@ public class OverpassAPISource implements RunnableSource {
      */
     public void setSink(final Sink aSink) {
         this.mySink = aSink;
+        
     }
 
     /**
@@ -197,6 +202,7 @@ public class OverpassAPISource implements RunnableSource {
         	String encoded = URLEncoder.encode(query,"utf-8");
         	//encoded = encoded.replaceAll("\\.", "%2E");
         	//encoded = encoded.replaceAll("-", "%2D");
+        	System.out.println(myBaseUrl + "?data=" + encoded);
         	
             SAXParser parser = createParser();
             InputStream inputStream =
@@ -206,7 +212,7 @@ public class OverpassAPISource implements RunnableSource {
             // First send the Bound down the pipeline
             mySink.process(new BoundContainer(new Bound(myRight, myLeft, myTop, myBottom, myBaseUrl)));
             try {
-                parser.parse(inputStream, new OsmHandler(mySink, true));
+                parser.parse(inputStream, new Handler(mySink, false));
             } finally {
                 inputStream.close();
                 inputStream = null;
@@ -287,4 +293,60 @@ public class OverpassAPISource implements RunnableSource {
 
         return responseStream;
     }
+
+    public class Handler extends DefaultHandler
+    {
+
+    	//private static final Logger LOG = Logger.getLogger(OsmHandler.class.getName());
+	private static final String ELEMENT_NAME_OSM = "osm";
+	private ElementProcessor osmElementProcessor;
+	private ElementProcessor elementProcessor;
+	private Locator documentLocator;
+
+	
+	public Handler(Sink osmSink, boolean enableDateParsing)
+	{
+		this.osmElementProcessor = new OsmElementProcessor(null, osmSink, false, false);
+	}
+
+	public void startElement(String uri, String localName, String qName, Attributes attributes)
+	{
+		if (this.elementProcessor != null)
+		{
+			this.elementProcessor = this.elementProcessor.getChild(uri, localName, qName);
+		} else if ("osm".equals(qName))
+		{
+			this.elementProcessor = this.osmElementProcessor;
+		}
+		else
+		{
+			throw new OsmosisRuntimeException("This does not appear to be an OSM XML file.");
+		}
+
+		this.elementProcessor.begin(attributes);
+	}
+
+	public void endElement(String uri, String localName, String qName)
+	{
+		this.elementProcessor.end();
+
+		this.elementProcessor = this.elementProcessor.getParent();
+	}
+
+	public void setDocumentLocator(Locator documentLocator)
+	{
+		this.documentLocator = documentLocator;
+	}
+
+	public void error(SAXParseException e)
+	        throws SAXException
+	{
+//		LOG.severe("Unable to parse xml file.  publicId=(" + this.documentLocator.getPublicId()
+//		           + "), systemId=(" + this.documentLocator.getSystemId() + "), lineNumber="
+//		           + this.documentLocator.getLineNumber() + ", columnNumber="
+//		           + this.documentLocator.getColumnNumber() + ".");
+
+		super.error(e);
+	}
+}
 }

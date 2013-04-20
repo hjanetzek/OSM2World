@@ -14,6 +14,7 @@ import org.osm2world.core.ConversionFacade.Phase;
 import org.osm2world.core.ConversionFacade.ProgressListener;
 import org.osm2world.core.ConversionFacade.Results;
 import org.osm2world.core.map_elevation.creation.ZeroElevationCalculator;
+import org.osm2world.core.osm.creation.OverpassAPIReader;
 import org.osm2world.core.osm.creation.OverpassAPISource;
 import org.osm2world.core.target.obj.ObjWriter;
 import org.osm2world.core.world.creation.WorldModule;
@@ -38,45 +39,51 @@ public class TileGenerator {
 				+ "relation(bw.parts)[\"type\"~\"multipolygon\"]->.poly;"
 				+ "relation(bw.parts)[\"type\"~\"building\"]->.rel;"
 				+ "(.parts;way(r.poly);)->.parts;"
-				+ "(node(w.parts);node(r.rel);.parts;.rel;);out meta;";
+				+ "(node(w.parts);node(r.rel);.parts;.rel;);out;";
 
+		
 		double bottom = 53.071107696397085;
 		double left = 8.806142807006836;
 		double top = 53.07795294848583;
 		double right = 8.817451000213623;
 
-		OverpassAPISource source = new OverpassAPISource(left, right, top,
+//		OverpassAPISource source = new OverpassAPISource(left, right, top,
+//				bottom, null, query);
+
+		OverpassAPIReader source = new OverpassAPIReader(left, right, top,
 				bottom, null, query);
 
 		Configuration config = new BaseConfiguration();
 		config.setProperty("createTerrain", Boolean.FALSE);
 		config.setProperty("renderUnderground", Boolean.FALSE);
+		config.setProperty("MapCenterLon", left);
+		config.setProperty("MapCenterLat", bottom);
 		
 		try {
 			List<WorldModule> modules = Arrays.asList((WorldModule)
 					new BuildingModule());
 			
-			Results results = cf.createRepresentations(source, modules, config, 	null);
+			Results results = cf.createRepresentations(source, modules, config, null);
 
+			results.getMapProjection();
+			
+			long startWrite = System.currentTimeMillis();
 			ObjWriter.writeObjFile(new File("test.obj"), results.getMapData(),
 					results.getEleData(), results.getTerrain(),
 					results.getMapProjection(), null, null);
 
+			System.out.println("write took " + (System.currentTimeMillis() - startWrite));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
-		long timeSec = (System.currentTimeMillis() - start) / 1000;
-		System.out.println("finished after " + timeSec + " s");
-
 		String a = String
-				.format("|%6d |%6d |%6d |%6d |%6d |%6d |\n",
+				.format("|MAP_DATA %6d |REPRESENTATION %6d |ELEVATION %6d |TERRAIN %6d |%6d |%6d |\n",
 						(perfListener.getPhaseDuration(Phase.MAP_DATA) + 500) / 1000,
 						(perfListener.getPhaseDuration(Phase.REPRESENTATION) + 500) / 1000,
 						(perfListener.getPhaseDuration(Phase.ELEVATION) + 500) / 1000,
 						(perfListener.getPhaseDuration(Phase.TERRAIN) + 500) / 1000,
-						(System.currentTimeMillis()
-								- perfListener.getPhaseEnd(Phase.TERRAIN) + 500) / 1000,
+						(System.currentTimeMillis() - perfListener.getPhaseEnd(Phase.TERRAIN) + 500) / 1000,
 						(System.currentTimeMillis() - start + 500) / 1000);
 
 		System.out.println(a);
