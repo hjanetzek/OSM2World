@@ -1,7 +1,10 @@
 package org.osm2world.core.map_data.creation;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,7 +31,7 @@ public class OSMToMapDataConverterTest {
 				+File.separator+filename);
 		
 		OSMData osmData = new OsmosisReader(testFile).getData();
-		MapProjection mapProjection = new HackMapProjection(osmData);
+		MapProjection mapProjection = new HackMapProjection(null, osmData);
 		
 		return new OSMToMapDataConverter(mapProjection).createMapData(osmData);
 		
@@ -89,7 +92,7 @@ public class OSMToMapDataConverterTest {
 				+File.separator+filename);
 		
 		OSMData osmData = new OsmosisReader(testFile).getData();
-		MapProjection mapProjection = new HackMapProjection(osmData);
+		MapProjection mapProjection = new HackMapProjection(null, osmData);
 		
 		OSMToMapDataConverter converter = new OSMToMapDataConverter(mapProjection);
 		MapData mapData = converter.createMapData(osmData);
