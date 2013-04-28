@@ -4,6 +4,4 @@ build
 ..
 .bzr
 .bzrignore
-.classpath
-.project
 doc/javadoc
