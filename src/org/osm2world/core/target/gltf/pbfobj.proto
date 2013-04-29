@@ -1,0 +1,44 @@
+// Protocol Version 2
+
+package org.oscim.util.pbfmesh;
+
+option java_package = "org.oscim.util.pbfmesh";
+option optimize_for = LITE_RUNTIME;
+
+message Data {
+
+	message Element {
+		long id = 1;
+		
+		repeated uint32 tags        = 10 [packed = true];
+
+		uint32 num_indices          = 11 [default = 1];
+		repeated uint32 indices     = 12 [packed = true];
+		
+		repeated sint32 coord_x     = 21 [packed = true];
+		repeated sint32 coord_y     = 22 [packed = true];
+		repeated sint32 coord_z     = 23 [packed = true];
+		
+		
+		optional uint32 color       = 31;
+	}
+	// tags
+	required uint32 num_tags   = 1;
+	repeated uint32 keys       = 2 [packed = true];
+	repeated string values     = 3;
+	
+	// non-closed linestring	
+	repeated Element lines     = 11;
+
+	// polygons are implicitly closed 
+	repeated Element polygons  = 12;
+
+	// POIs
+	repeated Element points    = 13;
+
+	// prepared label placement, not used
+	repeated Element waylabel  = 21;
+
+	// tile is completely water, not used
+	optional uint32 water      = 31;
+}

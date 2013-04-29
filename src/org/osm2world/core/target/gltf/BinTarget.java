@@ -1,8 +1,10 @@
 package org.osm2world.core.target.gltf;
 
 import java.awt.Color;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -22,17 +24,25 @@ import org.osm2world.core.target.common.material.Material;
 import org.osm2world.core.target.common.material.Materials;
 import org.osm2world.core.world.data.WorldObject;
 
+import darwin.jopenctm.data.AttributeData;
+import darwin.jopenctm.data.Mesh;
+import darwin.jopenctm.errorhandling.InvalidDataException;
+import darwin.jopenctm.io.CtmFileWriter;
+
 public class BinTarget extends FaceTarget<RenderableToBin> {
 
 	private final PrintStream objStream;
 	private final PrintStream mtlStream;
-	private final OutputStream idxStream;
-	private final OutputStream vtxStream;
-
+	private final CtmFileWriter ctmWriter;
+	
 	private final Map<VectorXYZ, Integer> vertexIndexMap = new HashMap<VectorXYZ, Integer>();
 	private final Map<VectorXYZ, Integer> normalsIndexMap = new HashMap<VectorXYZ, Integer>();
 	private final Map<VectorXZ, Integer> texCoordsIndexMap = new HashMap<VectorXZ, Integer>();
 	private final Map<Material, String> materialMap = new HashMap<Material, String>();
+
+	private final List<Integer> indicesList = new ArrayList<Integer>(1 << 15);
+	private final List<Vertex> vertexList = new ArrayList<Vertex>(1 << 15);
+	private final Map<Vertex, Integer> vertexMap = new HashMap<Vertex, Integer>();
 
 	private Class<? extends WorldObject> currentWOGroup = null;
 	private int anonymousWOCounter = 0;
@@ -41,17 +51,16 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 	private static int anonymousMaterialCounter = 0;
 	private StringBuffer buf;
 
-
 	static class Vertex {
 		int hash;
 
 		VectorXYZ position;
-		VectorXZ normal;
+		VectorXYZ normal;
 		VectorXZ tex;
 
 		@Override
 		public boolean equals(Object obj) {
-			if (! (obj instanceof Vertex))
+			if (!(obj instanceof Vertex))
 				return false;
 
 			Vertex other = (Vertex) obj;
@@ -59,10 +68,10 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 			if (!position.equals(other.position))
 				return false;
 
-			if (normal == null){
+			if (normal == null) {
 				if (other.normal != null)
 					return false;
-			} else{
+			} else {
 				if (other.normal == null)
 					return false;
 
@@ -70,17 +79,16 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 					return false;
 			}
 
-			if (tex == null){
+			if (tex == null) {
 				if (other.tex != null)
 					return false;
-			} else{
+			} else {
 				if (other.tex == null)
 					return false;
 
 				if (!tex.equals(other.tex))
 					return false;
 			}
-
 
 			return true;
 		}
@@ -91,15 +99,21 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 				return hash;
 
 			hash = 31 + 7 * position.hashCode();
+
+			if (normal != null)
+				hash *= 7 * normal.hashCode();
+
+			if (tex != null)
+				hash *= 7 * tex.hashCode();
+
 			return hash;
 		}
 	}
 
-	public BinTarget(PrintStream objStream, PrintStream mtlStream, OutputStream vtxStream, OutputStream idxStream) {
-		this.vtxStream = vtxStream;
-		this.idxStream = idxStream;
+	public BinTarget(PrintStream objStream, PrintStream mtlStream, CtmFileWriter ctmWriter) {
 		this.objStream = objStream;
 		this.mtlStream = mtlStream;
+		this.ctmWriter = ctmWriter;
 	}
 
 	@Override
@@ -114,12 +128,12 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 
 	@Override
 	public boolean reconstructFaces() {
-		return config != null && config.getBoolean("reconstructFaces", false);
+		return false;
 	}
 
 	@Override
 	public void beginObject(WorldObject object) {
-		if (buf != null){
+		if (buf != null) {
 			objStream.print(buf);
 		}
 
@@ -137,8 +151,10 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 				buf.append('\n');
 			}
 
-			/* start an object with the object's class
-			 * and the underlying OSM element's name/ref tags */
+			/*
+			 * start an object with the object's class and the underlying OSM
+			 * element's name/ref tags
+			 */
 			MapElement element = object.getPrimaryMapElement();
 			OSMElement osmElement;
 			if (element instanceof MapNode) {
@@ -160,7 +176,7 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 			} else if (osmElement != null && osmElement.tags.containsKey("ref")) {
 				buf.append(osmElement.tags.getValue("ref"));
 			} else {
-				buf.append(anonymousWOCounter ++);
+				buf.append(anonymousWOCounter++);
 			}
 			buf.append('\n');
 		}
@@ -169,30 +185,74 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 
 	@Override
 	public void finish() {
-		if (buf != null){
-			System.out.println("finish object: " + buf.length());
-			objStream.print(buf);
+		int[] indices = new int[indicesList.size()];
+		for (int i = 0, n = indicesList.size(); i < n; i++)
+			indices[i] = indicesList.get(i);
+		
+		System.out.println("indices: " + indicesList.size() + " vertices " + vertexList.size());
+		
+		float[] vertices = new float[vertexList.size() * 3];
+		float[] normals = new float[vertexList.size() * 3];
+		
+		for (int i = 0, n = vertexList.size(); i < n; i++){
+			Vertex v = vertexList.get(i);
+			
+			vertices[i*3+0] = (float)v.position.x;
+			vertices[i*3+1] = (float)v.position.y;
+			vertices[i*3+2] = (float)v.position.z;
+
+//			normals[i*3+0] = (float)v.normal.x;
+//			normals[i*3+1] = (float)v.normal.y;
+//			normals[i*3+2] = (float)v.normal.z;
+		}	
+		
+		Mesh m = new Mesh(vertices, null, indices, new AttributeData[0], new AttributeData[0]);
+		try {
+			this.ctmWriter.encode(m, "a");
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InvalidDataException e) {
+			e.printStackTrace();
 		}
-		super.finish();
 	};
 
 	@Override
 	public void drawFace(Material material, List<VectorXYZ> vs,
 			List<VectorXYZ> normals, List<List<VectorXZ>> texCoordLists) {
 
-		useMaterial(material);
+		for (int i = 0, n = vs.size(); i < n; i++) {
+			Vertex vertex = new Vertex();
+			vertex.position = vs.get(i);
 
-		int[] normalIndices = null;
-		if (normals != null) {
-			normalIndices = normalsToIndices(normals);
+//			if (normals != null)
+//				vertex.normal = normals.get(i);
+
+			// if (texCoordLists != null)
+			// vertex.tex= texCoordLists.get(i);
+
+			Integer idx = vertexMap.get(vertex);
+			if (idx == null){
+				idx = vertexList.size();
+
+				vertexMap.put(vertex, idx);
+				vertexList.add(vertex);
+			}
+			indicesList.add(idx);
 		}
 
-		int[] texCoordIndices = null;
-		if (texCoordLists != null && !texCoordLists.isEmpty()) {
-			texCoordIndices = texCoordsToIndices(texCoordLists.get(0));
-		}
+		// useMaterial(material);
 
-		writeFace(verticesToIndices(vs), normalIndices, texCoordIndices);
+		// int[] normalIndices = null;
+		// if (normals != null) {
+		// normalIndices = normalsToIndices(normals);
+		// }
+		//
+		// int[] texCoordIndices = null;
+		// if (texCoordLists != null && !texCoordLists.isEmpty()) {
+		// texCoordIndices = texCoordsToIndices(texCoordLists.get(0));
+		// }
+		//
+		// writeFace(verticesToIndices(vs), normalIndices, texCoordIndices);
 
 	}
 
@@ -201,172 +261,172 @@ public class BinTarget extends FaceTarget<RenderableToBin> {
 			Collection<? extends TriangleXYZWithNormals> triangles,
 			List<List<VectorXZ>> texCoordLists) {
 
-		useMaterial(material);
-
-		int triangleNumber = 0;
+		// int triangleNumber = 0;
 		for (TriangleXYZWithNormals triangle : triangles) {
+			List<VectorXYZ> vs = triangle.getVertices();
+			List<VectorXYZ> normals = triangle.getNormals();
 
-			int[] texCoordIndices = null;
-			if (texCoordLists != null && !texCoordLists.isEmpty()) {
-				List<VectorXZ> texCoords = texCoordLists.get(0);
+			for (int i = 0, n = vs.size(); i < n; i++) {
+				Vertex vertex = new Vertex();
+				vertex.position = vs.get(i);
+
+//				if (normals != null)
+//					vertex.normal = normals.get(i);
+
 				
-				texCoordIndices = texCoordsToIndices(
-						texCoords.subList(3*triangleNumber, 3*triangleNumber + 3));
-			}
-
-			writeFace(verticesToIndices(triangle.getVertices()),
-					normalsToIndices(triangle.getNormals()), texCoordIndices);
-
-			triangleNumber ++;
-
-		}
-
-	}
-
-	private void useMaterial(Material material) {
-		if (!material.equals(currentMaterial)) {
-
-			String name = materialMap.get(material);
-			if (name == null) {
-				name = Materials.getUniqueName(material);
-				if (name == null) {
-					name = "MAT_" + anonymousMaterialCounter;
-					anonymousMaterialCounter += 1;
+				Integer idx = vertexMap.get(vertex);
+				if (idx == null){
+					vertexMap.put(vertex, vertexList.size());
+					vertexList.add(vertex);
 				}
-				materialMap.put(material, name);
-				writeMaterial(material, name);
 			}
+			// triangleNumber++;
 
-			buf.append("usemat ");
-			buf.append(name);
-			buf.append('\n');
-		}
-	}
-
-	private int[] verticesToIndices(List<? extends VectorXYZ> vs) {
-		return vectorsToIndices(vertexIndexMap, "v ", vs);
-	}
-
-	private int[] normalsToIndices(List<? extends VectorXYZ> normals) {
-		return vectorsToIndices(normalsIndexMap, "vn ", normals);
-	}
-
-	private int[] texCoordsToIndices(List<VectorXZ> texCoords) {
-		return vectorsToIndices(texCoordsIndexMap, "vt ", texCoords);
-	}
-
-	private <V> int[] vectorsToIndices(Map<V, Integer> indexMap,
-			String objLineStart, List<? extends V> vectors) {
-
-		int[] indices = new int[vectors.size()];
-
-		for (int i=0; i<vectors.size(); i++) {
-			final V v = vectors.get(i);
-			Integer index = indexMap.get(v);
-			if (index == null) {
-				index = indexMap.size();
-				buf.append(objLineStart);
-				if (v instanceof VectorXYZ) {
-					VectorXYZ vXYZ = (VectorXYZ)v;
-					appendDouble(vXYZ.x, buf);
-					buf.append(' ');
-					appendDouble(vXYZ.y, buf);
-					buf.append(' ');
-					appendDouble(-vXYZ.z, buf);
-				}
-				else{
-					VectorXZ vXZ = (VectorXZ)v;
-					appendDouble(vXZ.x, buf);
-					buf.append(' ');
-					appendDouble(-vXZ.z, buf);
-				}
-				buf.append('\n');
-				indexMap.put(v, index);
-			}
-			indices[i] = index;
 		}
 
-		return indices;
+		// useMaterial(material);
+		//
+		// int triangleNumber = 0;
+		// for (TriangleXYZWithNormals triangle : triangles) {
+		//
+		// int[] texCoordIndices = null;
+		// if (texCoordLists != null && !texCoordLists.isEmpty()) {
+		// List<VectorXZ> texCoords = texCoordLists.get(0);
+		//
+		// texCoordIndices = texCoordsToIndices(texCoords.subList(
+		// 3 * triangleNumber, 3 * triangleNumber + 3));
+		// }
+		//
+		// writeFace(verticesToIndices(triangle.getVertices()),
+		// normalsToIndices(triangle.getNormals()), texCoordIndices);
+		//
+		// triangleNumber++;
+		//
+		// }
 
 	}
 
+	// private void useMaterial(Material material) {
+	// if (!material.equals(currentMaterial)) {
+	// currentMaterial = material;
+	//
+	// String name = materialMap.get(material);
+	// if (name == null) {
+	// name = Materials.getUniqueName(material);
+	// if (name == null) {
+	// name = "MAT_" + anonymousMaterialCounter;
+	// anonymousMaterialCounter += 1;
+	// }
+	// materialMap.put(material, name);
+	// writeMaterial(material, name);
+	// }
+	//
+	// buf.append("usemat ");
+	// buf.append(name);
+	// buf.append('\n');
+	// }
+	// }
+	//
+	// private int[] verticesToIndices(List<? extends VectorXYZ> vs) {
+	// return vectorsToIndices(vertexIndexMap, "v ", vs);
+	// }
+	//
+	// private int[] normalsToIndices(List<? extends VectorXYZ> normals) {
+	// return vectorsToIndices(normalsIndexMap, "vn ", normals);
+	// }
+	//
+	// private int[] texCoordsToIndices(List<VectorXZ> texCoords) {
+	// return vectorsToIndices(texCoordsIndexMap, "vt ", texCoords);
+	// }
 
+	// private <V> int[] vectorsToIndices(Map<V, Integer> indexMap,
+	// String objLineStart, List<? extends V> vectors) {
+	//
+	// int[] indices = new int[vectors.size()];
+	//
+	// for (int i = 0; i < vectors.size(); i++) {
+	// final V v = vectors.get(i);
+	// Integer index = indexMap.get(v);
+	// if (index == null) {
+	// index = indexMap.size();
+	// buf.append(objLineStart);
+	// if (v instanceof VectorXYZ) {
+	// VectorXYZ vXYZ = (VectorXYZ) v;
+	// appendDouble(vXYZ.x, buf);
+	// buf.append(' ');
+	// appendDouble(vXYZ.y, buf);
+	// buf.append(' ');
+	// appendDouble(-vXYZ.z, buf);
+	// } else {
+	// VectorXZ vXZ = (VectorXZ) v;
+	// appendDouble(vXZ.x, buf);
+	// buf.append(' ');
+	// appendDouble(-vXZ.z, buf);
+	// }
+	// buf.append('\n');
+	// indexMap.put(v, index);
+	// }
+	// indices[i] = index;
+	// }
+	//
+	// return indices;
+	//
+	// }
+	//
+	// private void writeFace(int[] vertexIndices, int[] normalIndices,
+	// int[] texCoordIndices) {
+	//
+	// assert normalIndices == null
+	// || vertexIndices.length == normalIndices.length;
+	//
+	// buf.append('f');
+	//
+	// for (int i = 0; i < vertexIndices.length; i++) {
+	// buf.append(' ');
+	// buf.append(vertexIndices[i] + 1);
+	//
+	// if (texCoordIndices != null) {
+	// buf.append('/');
+	// buf.append(texCoordIndices[i] + 1);
+	// }
+	//
+	// if (normalIndices != null) {
+	// if (texCoordIndices == null)
+	// buf.append('/');
+	//
+	// buf.append('/');
+	// buf.append(normalIndices[i] + 1);
+	// }
+	// }
+	//
+	// buf.append('\n');
+	// }
+	//
+	// private void writeMaterial(Material material, String name) {
+	//
+	// TextureData textureData = null;
+	// if (!material.getTextureDataList().isEmpty()) {
+	// textureData = material.getTextureDataList().get(0);
+	// }
+	//
+	// mtlStream.println("newmtl " + name);
+	// writeColorLine("Ka", material.ambientColor());
+	// writeColorLine("Kd", material.diffuseColor());
+	// // Ks
+	// // Ns
+	// if (textureData != null) {
+	// mtlStream.println("map_Ka " + textureData.file);
+	// mtlStream.println("map_Kd " + textureData.file);
+	// }
+	// mtlStream.println();
+	//
+	// }
 
-	private void writeFace(int[] vertexIndices, int[] normalIndices,
-			int[] texCoordIndices) {
+	// private void writeColorLine(String lineStart, Color color) {
+	//
+	// mtlStream.println(lineStart + " " + color.getRed() / 255f + " "
+	// + color.getGreen() / 255f + " " + color.getBlue() / 255f);
+	//
+	// }
 
-		assert normalIndices == null
-				|| vertexIndices.length == normalIndices.length;
-
-
-		buf.append('f');
-
-		for (int i = 0; i < vertexIndices.length; i++) {
-			buf.append(' ');
-			buf.append(vertexIndices[i]+1);
-
-			if (texCoordIndices != null){
-				buf.append('/');
-				buf.append(texCoordIndices[i]+1);
-			}
-
-			if (normalIndices != null){
-				if (texCoordIndices == null)
-					buf.append('/');
-
-				buf.append('/');
-				buf.append(normalIndices[i]+1);
-			}
-		}
-
-		buf.append('\n');
-	}
-
-	private void writeMaterial(Material material, String name) {
-
-		TextureData textureData = null;
-		if (!material.getTextureDataList().isEmpty()) {
-			textureData = material.getTextureDataList().get(0);
-		}
-
-		mtlStream.println("newmtl " + name);
-		writeColorLine("Ka", material.ambientColor());
-		writeColorLine("Kd", material.diffuseColor());
-		//Ks
-		//Ns
-		if (textureData != null) {
-			mtlStream.println("map_Ka " + textureData.file);
-			mtlStream.println("map_Kd " + textureData.file);
-		}
-		mtlStream.println();
-
-	}
-
-	private void writeColorLine(String lineStart, Color color) {
-
-		mtlStream.println(lineStart
-				+ " " + color.getRed() / 255f
-				+ " " + color.getGreen() / 255f
-				+ " " + color.getBlue() / 255f);
-
-	}
-
-	private static final int POW10[] = {1, 10, 100, 1000, 10000, 100000, 1000000};
-
-	public static void appendDouble(double val, StringBuffer sb) {
-		int precision = 4;
-
-		if (val < 0) {
-			sb.append('-');
-			val = -val;
-		}
-		int exp = POW10[precision];
-		long lval = (long) (val * exp + 0.5);
-		sb.append(lval / exp).append('.');
-		long fval = lval % exp;
-		for (int p = precision - 1; p > 0 && fval < POW10[p]; p--) {
-			sb.append('0');
-		}
-		sb.append(fval);
-	}
 }

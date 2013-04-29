@@ -1,14 +1,9 @@
 package org.osm2world.core.target.gltf;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static java.lang.String.format;
-
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Iterator;
 
 import org.osm2world.core.GlobalValues;
 import org.osm2world.core.heightmap.data.CellularTerrainElevation;
@@ -21,19 +16,21 @@ import org.osm2world.core.target.common.rendering.Camera;
 import org.osm2world.core.target.common.rendering.Projection;
 import org.osm2world.core.terrain.data.Terrain;
 
+import darwin.jopenctm.compression.MG1Encoder;
+import darwin.jopenctm.io.CtmFileWriter;
+
 /**
  * utility class for creating an Wavefront OBJ file
  */
 public final class BinWriter {
 
 	/** prevents instantiation */
-	private BinWriter() { }
+	private BinWriter() {
+	}
 
-	public static final void writeObjFile(
-			File objFile, MapData mapData,
+	public static final void writeObjFile(File objFile, MapData mapData,
 			CellularTerrainElevation eleData, Terrain terrain,
-			MapProjection mapProjection,
-			Camera camera, Projection projection)
+			MapProjection mapProjection, Camera camera, Projection projection)
 			throws IOException {
 
 		if (!objFile.exists()) {
@@ -45,21 +42,30 @@ public final class BinWriter {
 			mtlFile.createNewFile();
 		}
 
-		File vtxFile = new File(objFile.getAbsoluteFile() + ".vert");
-		if (!vtxFile.exists()) {
-			vtxFile.createNewFile();
+		
+		File ctmFile = new File(objFile.getAbsoluteFile() + ".ctm");
+		if (ctmFile.exists()) {
+			ctmFile.delete();
 		}
+		
+		
+		//FileOutputStream idxStream = new FileOutputStream(ctmFile);
+		CtmFileWriter ctmWriter = new CtmFileWriter(new FileOutputStream(ctmFile), new MG1Encoder(), 9);
 
-		File idxFile = new File(objFile.getAbsoluteFile() + ".idx");
-		if (!idxFile.exists()) {
-			idxFile.createNewFile();
-		}
+		//		File vtxFile = new File(objFile.getAbsoluteFile() + ".vert");
+//		if (!vtxFile.exists()) {
+//			vtxFile.createNewFile();
+//		}
+//
+//		File idxFile = new File(objFile.getAbsoluteFile() + ".idx");
+//		if (!idxFile.exists()) {
+//			idxFile.createNewFile();
+//		}
 
 		PrintStream objStream = new PrintStream(objFile);
 		PrintStream mtlStream = new PrintStream(mtlFile);
 
-		FileOutputStream idxStream = new FileOutputStream(idxFile);
-		FileOutputStream vtxStream = new FileOutputStream(vtxFile);
+//		FileOutputStream vtxStream = new FileOutputStream(vtxFile);
 
 		/* write comments at the beginning of both files */
 
@@ -73,7 +79,7 @@ public final class BinWriter {
 
 		/* write actual file content */
 
-		BinTarget target = new BinTarget(objStream, mtlStream, idxStream, vtxStream);
+		BinTarget target = new BinTarget(objStream, mtlStream, ctmWriter);
 
 		TargetUtil.renderWorldObjects(target, mapData, true);
 
@@ -81,92 +87,9 @@ public final class BinWriter {
 			TargetUtil.renderObject(target, terrain);
 		}
 
+		target.finish();
+
 		objStream.close();
-		mtlStream.close();
-
-	}
-
-	public static final void writeObjFiles(
-			final File objDirectory, MapData mapData,
-			CellularTerrainElevation eleData, Terrain terrain,
-			final MapProjection mapProjection,
-			Camera camera, Projection projection,
-			int primitiveThresholdPerFile)
-			throws IOException {
-
-		if (!objDirectory.exists()) {
-			objDirectory.mkdir();
-		}
-
-		checkArgument(objDirectory.isDirectory());
-
-		final File mtlFile = new File(objDirectory.getPath()
-				+ File.separator + "materials.mtl");
-		if (!mtlFile.exists()) {
-			mtlFile.createNewFile();
-		}
-
-		final PrintStream mtlStream = new PrintStream(mtlFile);
-
-		writeMtlHeader(mtlStream);
-
-		/* create iterator which creates and wraps .obj files as needed */
-
-		Iterator<BinTarget> objIterator = new Iterator<BinTarget>() {
-
-			private int fileCounter = 0;
-			PrintStream objStream = null;
-
-			@Override
-			public boolean hasNext() {
-				return true;
-			}
-
-			@Override
-			public BinTarget next() {
-
-				try {
-
-					if (objStream != null) {
-						objStream.close();
-						fileCounter ++;
-					}
-
-					File objFile = new File(objDirectory.getPath() + File.separator
-							+ "part" + format("%04d", fileCounter) + ".obj");
-
-					if (!objFile.exists()) {
-						objFile.createNewFile();
-					}
-
-					objStream = new PrintStream(objFile);
-
-					writeObjHeader(objStream, mapProjection);
-
-					objStream.println("mtllib " + mtlFile.getName() + "\n");
-
-					return null; //new BinTarget(objStream, mtlStream, );
-
-				} catch (FileNotFoundException e) {
-					throw new RuntimeException(e);
-				} catch (IOException e) {
-					throw new RuntimeException(e);
-				}
-
-			}
-
-			@Override
-			public void remove() {
-				throw new UnsupportedOperationException();
-			}
-
-		};
-
-		/* write file content */
-
-		TargetUtil.renderWorldObjects(objIterator, mapData, primitiveThresholdPerFile);
-		TargetUtil.renderObject(objIterator.next(), terrain);
-
 		mtlStream.close();
 
 	}
@@ -178,13 +101,12 @@ public final class BinWriter {
 				+ GlobalValues.VERSION_STRING + " - "
 				+ GlobalValues.OSM2WORLD_URI + "\n");
 		objStream.println("# Projection information:");
-		objStream.println("# Coordinate origin (0,0,0): "
-				+ "lat " + mapProjection.calcLat(VectorXZ.NULL_VECTOR) + ", "
-				+ "lon " + mapProjection.calcLon(VectorXZ.NULL_VECTOR) + ", "
-				+ "ele 0");
-		objStream.println("# North direction: " + new VectorXYZ(
-						mapProjection.getNorthUnit().x, 0,
-						- mapProjection.getNorthUnit().z));
+		objStream.println("# Coordinate origin (0,0,0): " + "lat "
+				+ mapProjection.calcLat(VectorXZ.NULL_VECTOR) + ", " + "lon "
+				+ mapProjection.calcLon(VectorXZ.NULL_VECTOR) + ", " + "ele 0");
+		objStream.println("# North direction: "
+				+ new VectorXYZ(mapProjection.getNorthUnit().x, 0,
+						-mapProjection.getNorthUnit().z));
 		objStream.println("# 1 coordinate unit corresponds to roughly "
 				+ "1 m in reality\n");
 
