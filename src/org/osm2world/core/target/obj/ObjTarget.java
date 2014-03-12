@@ -32,39 +32,39 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 
 	private final PrintStream objStream;
 	private final PrintStream mtlStream;
-	
+
 	private final Map<VectorXYZ, Integer> vertexIndexMap = new HashMap<VectorXYZ, Integer>();
 	private final Map<VectorXYZ, Integer> normalsIndexMap = new HashMap<VectorXYZ, Integer>();
 	private final Map<VectorXZ, Integer> texCoordsIndexMap = new HashMap<VectorXZ, Integer>();
 	private final Map<Material, String> materialMap = new HashMap<Material, String>();
-	
+
 	private Class<? extends WorldObject> currentWOGroup = null;
 	private int anonymousWOCounter = 0;
-	
+
 	private Material currentMaterial = null;
 	private int currentMaterialLayer = 0;
 	private static int anonymousMaterialCounter = 0;
-	
+
 	// this is approximatly one millimeter
 	private static final double SMALL_OFFSET = 1e-3;
-	
+
 	public ObjTarget(PrintStream objStream, PrintStream mtlStream) {
-		
+
 		this.objStream = objStream;
 		this.mtlStream = mtlStream;
-				
+
 	}
-	
+
 	@Override
 	public Class<RenderableToObj> getRenderableType() {
 		return RenderableToObj.class;
 	}
-	
+
 	@Override
 	public void render(RenderableToObj renderable) {
 		renderable.renderTo(this);
 	}
-	
+
 	@Override
 	public boolean reconstructFaces() {
 		return config != null && config.getBoolean("reconstructFaces", false);
@@ -72,25 +72,27 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 
 	@Override
 	public void beginObject(WorldObject object) {
-		
+
 		if (object == null) {
-			
+
 			currentWOGroup = null;
 			objStream.println("g null");
 			objStream.println("o null");
-			
+
 		} else {
-			
+
 			/* maybe start a group depending on the object's class */
-			
+
 			if (!object.getClass().equals(currentWOGroup)) {
 				currentWOGroup = object.getClass();
 				objStream.println("g " + currentWOGroup.getSimpleName());
 			}
-			
-			/* start an object with the object's class
-			 * and the underlying OSM element's name/ref tags */
-			
+
+			/*
+			 * start an object with the object's class and the underlying OSM
+			 * element's name/ref tags
+			 */
+
 			MapElement element = object.getPrimaryMapElement();
 			OSMElement osmElement;
 			if (element instanceof MapNode) {
@@ -102,19 +104,19 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 			} else {
 				osmElement = null;
 			}
-			
+
 			if (osmElement != null && osmElement.tags.containsKey("name")) {
 				objStream.println("o " + object.getClass().getSimpleName() + " " + osmElement.tags.getValue("name"));
 			} else if (osmElement != null && osmElement.tags.containsKey("ref")) {
 				objStream.println("o " + object.getClass().getSimpleName() + " " + osmElement.tags.getValue("ref"));
 			} else {
-				objStream.println("o " + object.getClass().getSimpleName() + anonymousWOCounter ++);
+				objStream.println("o " + object.getClass().getSimpleName() + anonymousWOCounter++);
 			}
-			
+
 		}
-		
+
 	}
-	
+
 	@Override
 	public void drawFace(Material material, List<VectorXYZ> vs,
 			List<VectorXYZ> normals, List<List<VectorXZ>> texCoordLists) {
@@ -123,19 +125,21 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 		if (normals != null) {
 			normalIndices = normalsToIndices(normals);
 		}
-		
+
 		VectorXYZ faceNormal = new TriangleXYZ(vs.get(0), vs.get(1), vs.get(2)).getNormal();
-		
+
 		for (int layer = 0; layer < max(1, material.getNumTextureLayers()); layer++) {
-			
+
 			useMaterial(material, layer);
-		
+
 			int[] texCoordIndices = null;
 			if (texCoordLists != null && !texCoordLists.isEmpty()) {
 				texCoordIndices = texCoordsToIndices(texCoordLists.get(layer));
 			}
-			
-			writeFace(verticesToIndices((layer == 0)? vs : offsetVertices(vs, nCopies(vs.size(), faceNormal), layer * SMALL_OFFSET)),
+
+			writeFace(
+					verticesToIndices((layer == 0) ? vs : offsetVertices(vs, nCopies(vs.size(), faceNormal), layer
+							* SMALL_OFFSET)),
 					normalIndices, texCoordIndices);
 		}
 	}
@@ -144,34 +148,36 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 	public void drawTrianglesWithNormals(Material material,
 			Collection<? extends TriangleXYZWithNormals> triangles,
 			List<List<VectorXZ>> texCoordLists) {
-		
+
 		for (int layer = 0; layer < max(1, material.getNumTextureLayers()); layer++) {
-			
+
 			useMaterial(material, layer);
 
 			int triangleNumber = 0;
 			for (TriangleXYZWithNormals t : triangles) {
-			
+
 				int[] texCoordIndices = null;
 				if (texCoordLists != null && !texCoordLists.isEmpty()) {
 					List<VectorXZ> texCoords = texCoordLists.get(layer);
 					texCoordIndices = texCoordsToIndices(
-							texCoords.subList(3*triangleNumber, 3*triangleNumber + 3));
+							texCoords.subList(3 * triangleNumber, 3 * triangleNumber + 3));
 				}
-				
-				writeFace(verticesToIndices((layer == 0)? t.getVertices() : offsetVertices(t.getVertices(), t.getNormals(), layer * SMALL_OFFSET)),
+
+				writeFace(
+						verticesToIndices((layer == 0) ? t.getVertices() : offsetVertices(t.getVertices(),
+								t.getNormals(), layer * SMALL_OFFSET)),
 						normalsToIndices(t.getNormals()), texCoordIndices);
-			
-				triangleNumber ++;
+
+				triangleNumber++;
 			}
-			
+
 		}
-		
+
 	}
 
 	private void useMaterial(Material material, int layer) {
 		if (!material.equals(currentMaterial) || (layer != currentMaterialLayer)) {
-			
+
 			String name = materialMap.get(material);
 			if (name == null) {
 				name = Materials.getUniqueName(material);
@@ -182,25 +188,26 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 				materialMap.put(material, name);
 				writeMaterial(material, name);
 			}
-			
+
 			objStream.println("usemtl " + name + "_" + layer);
-			
+
 			currentMaterial = material;
 			currentMaterialLayer = layer;
 		}
 	}
-	
-	private List<? extends VectorXYZ> offsetVertices(List<? extends VectorXYZ> vs, List<VectorXYZ> directions, double offset) {
-		
+
+	private List<? extends VectorXYZ> offsetVertices(List<? extends VectorXYZ> vs, List<VectorXYZ> directions,
+			double offset) {
+
 		List<VectorXYZ> result = new ArrayList<VectorXYZ>(vs.size());
-		
+
 		for (int i = 0; i < vs.size(); i++) {
 			result.add(vs.get(i).add(directions.get(i).mult(offset)));
 		}
-		
+
 		return result;
 	}
-	
+
 	private int[] verticesToIndices(List<? extends VectorXYZ> vs) {
 		return vectorsToIndices(vertexIndexMap, "v ", vs);
 	}
@@ -212,13 +219,13 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 	private int[] texCoordsToIndices(List<VectorXZ> texCoords) {
 		return vectorsToIndices(texCoordsIndexMap, "vt ", texCoords);
 	}
-	
+
 	private <V> int[] vectorsToIndices(Map<V, Integer> indexMap,
 			String objLineStart, List<? extends V> vectors) {
-		
+
 		int[] indices = new int[vectors.size()];
-		
-		for (int i=0; i<vectors.size(); i++) {
+
+		for (int i = 0; i < vectors.size(); i++) {
 			final V v = vectors.get(i);
 			Integer index = indexMap.get(v);
 			if (index == null) {
@@ -228,21 +235,21 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 			}
 			indices[i] = index;
 		}
-		
+
 		return indices;
-		
+
 	}
-	
+
 	private String formatVector(Object v) {
-		
+
 		if (v instanceof VectorXYZ) {
-			VectorXYZ vXYZ = (VectorXYZ)v;
+			VectorXYZ vXYZ = (VectorXYZ) v;
 			return vXYZ.x + " " + vXYZ.y + " " + (-vXYZ.z);
 		} else {
-			VectorXZ vXZ = (VectorXZ)v;
+			VectorXZ vXZ = (VectorXZ) v;
 			return vXZ.x + " " + vXZ.z;
 		}
-		
+
 	}
 
 	private void writeFace(int[] vertexIndices, int[] normalIndices,
@@ -255,45 +262,45 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 
 		for (int i = 0; i < vertexIndices.length; i++) {
 
-			objStream.print(" " + (vertexIndices[i]+1));
+			objStream.print(" " + (vertexIndices[i] + 1));
 
 			if (texCoordIndices != null && normalIndices == null) {
-				objStream.print("/" + (texCoordIndices[i]+1));
+				objStream.print("/" + (texCoordIndices[i] + 1));
 			} else if (texCoordIndices == null && normalIndices != null) {
-				objStream.print("//" + (normalIndices[i]+1));
+				objStream.print("//" + (normalIndices[i] + 1));
 			} else if (texCoordIndices != null && normalIndices != null) {
-				objStream.print("/" + (texCoordIndices[i]+1)
-						+ "/" + (normalIndices[i]+1));
+				objStream.print("/" + (texCoordIndices[i] + 1)
+						+ "/" + (normalIndices[i] + 1));
 			}
 
 		}
 
 		objStream.println();
 	}
-	
+
 	private void writeMaterial(Material material, String name) {
 
 		for (int i = 0; i < max(1, material.getNumTextureLayers()); i++) {
-			
+
 			TextureData textureData = null;
 			if (material.getTextureDataList().size() > 0) {
 				textureData = material.getTextureDataList().get(i);
 			}
-		
+
 			mtlStream.println("newmtl " + name + "_" + i);
-			
+
 			if (textureData == null || textureData.colorable) {
 				writeColorLine("Ka", material.ambientColor());
 				writeColorLine("Kd", material.diffuseColor());
-				//Ks
-				//Ns
+				// Ks
+				// Ns
 			} else {
 				writeColorLine("Ka", multiplyColor(WHITE, material.getAmbientFactor()));
 				writeColorLine("Kd", multiplyColor(WHITE, 1 - material.getAmbientFactor()));
-				//Ks
-				//Ns
+				// Ks
+				// Ns
 			}
-		
+
 			if (textureData != null) {
 				mtlStream.println("map_Ka " + textureData.file);
 				mtlStream.println("map_Kd " + textureData.file);
@@ -301,14 +308,14 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 			mtlStream.println();
 		}
 	}
-	
+
 	private void writeColorLine(String lineStart, Color color) {
-		
+
 		mtlStream.println(lineStart
 				+ " " + color.getRed() / 255f
 				+ " " + color.getGreen() / 255f
 				+ " " + color.getBlue() / 255f);
-		
+
 	}
 
 }
