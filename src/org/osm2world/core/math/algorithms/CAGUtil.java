@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.osm2world.core.math.InvalidGeometryException;
 import org.osm2world.core.math.PolygonWithHolesXZ;
 import org.osm2world.core.math.SimplePolygonXZ;
 
@@ -68,7 +69,11 @@ public final class CAGUtil {
 			new ArrayList<PolygonWithHolesXZ>();
 		
 		for (Geometry g : remainingGeometry) {
+			try {
 			result.addAll(polygonsXZFromJTSGeometry(g));
+			} catch (InvalidGeometryException e) {
+				System.err.println("error: " + e.getMessage());
+			}
 		}
 		
 		return result;
