@@ -11,10 +11,8 @@ import org.osm2world.core.math.VectorXZ;
  */
 public class HackMapProjection extends OriginMapProjection {
 	
-	/**
-	 * This is a correction value to make lonToX-values metric values
-	 */
-	private final static double LON_CORRECTION = 1.5;
+	private double originX;
+	private double originY;
 	
 	/*
 	 * All coordinates will be modified by subtracting the origin
@@ -26,8 +24,8 @@ public class HackMapProjection extends OriginMapProjection {
 	
 	public VectorXZ calcPos(double lat, double lon) {
 		
-		double x = lonToX(lon - origin.lon) / LON_CORRECTION;
-		double y = latToY(lat - origin.lat);
+		double x = lonToX(lon) - originX;
+		double y = latToY(lat) - originY;
 		
 		return new VectorXZ(x, y); //x and z(!) are 2d here
 	}
@@ -39,12 +37,12 @@ public class HackMapProjection extends OriginMapProjection {
 	
 	@Override
 	public double calcLat(VectorXZ pos) {
-		return yToLat(pos.z) + origin.lat;
+		return yToLat(pos.z + originY);
 	}
 	
 	@Override
 	public double calcLon(VectorXZ pos) {
-		return xToLon(pos.x * LON_CORRECTION) + origin.lon;
+		return xToLon(pos.x + originX);
 	}
 	
 	@Override
@@ -52,4 +50,12 @@ public class HackMapProjection extends OriginMapProjection {
 		return VectorXZ.Z_UNIT;
 	}
 	
+	@Override
+	public void setOrigin(LatLon origin) {
+		super.setOrigin(origin);
+		this.originY = latToY(origin.lat);
+		this.originX = lonToX(origin.lon);
+		System.out.println(origin.lat + " " + origin.lon + " / " + originX
+				+ ":" + originY);
+	}
 }
