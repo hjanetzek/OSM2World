@@ -1291,12 +1291,16 @@ public class BuildingModule extends ConfigurableWorldModule {
 				
 				/* create the triangulation of the roof */
 				
-				Collection<TriangleXZ> triangles =
-						Poly2TriUtil.triangulate(getPolygon().getOuter(),
-						                         getPolygon().getHoles(),
+				Collection<TriangleXZ> triangles = null;
+				try {
+					triangles = Poly2TriUtil.triangulate(getPolygon()
+							.getOuter(), getPolygon().getHoles(),
 						                         getInnerSegments(),
 						                         getInnerPoints());
-
+				} catch (Exception e) {
+					System.err.println("error: " + e.getMessage());
+					return;
+				}
 //						JTSTriangulationUtil.triangulate(
 //								getPolygon().getOuter(),
 //								getPolygon().getHoles(),
