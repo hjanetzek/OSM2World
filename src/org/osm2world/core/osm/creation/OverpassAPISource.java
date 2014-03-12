@@ -38,10 +38,10 @@ import org.xml.sax.helpers.DefaultHandler;
  */
 public class OverpassAPISource implements RunnableSource {
 
-	// private static final String OVERPASS_API =
-	// "http://overpass-api.de/api/interpreter";
+	private static final String OVERPASS_API = "http://overpass-api.de/api/interpreter";
 
-	private static final String OVERPASS_API = "http://city.informatik.uni-bremen.de/oapi/interpreter";
+	// private static final String OVERPASS_API =
+	// "http://city.informatik.uni-bremen.de/oapi/interpreter";
 	/**
 	 * The http-response-code for OK.
 	 */

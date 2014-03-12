@@ -34,7 +34,12 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 
 public class OverpassAPIReader implements OSMDataReader {
-	private static final String OVERPASS_API = "http://city.informatik.uni-bremen.de/oapi/interpreter";
+	// private static final String OVERPASS_API =
+	// "http://overpass-api.de/api/interpreter";
+	private static final String OVERPASS_API = "http://overpass.osm.rambler.ru/cgi/interpreter";
+
+	// private static final String OVERPASS_API =
+	// "http://city.informatik.uni-bremen.de/oapi/interpreter";
 	private static final int RESPONSECODE_OK = 200;
 
 	/**

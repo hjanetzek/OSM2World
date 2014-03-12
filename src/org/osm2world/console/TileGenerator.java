@@ -13,14 +13,28 @@ import org.osm2world.core.ConversionFacade;
 import org.osm2world.core.ConversionFacade.Phase;
 import org.osm2world.core.ConversionFacade.ProgressListener;
 import org.osm2world.core.ConversionFacade.Results;
-import org.osm2world.core.map_elevation.creation.ZeroElevationCalculator;
+import org.osm2world.core.map_data.creation.OriginMapProjection;
+import org.osm2world.core.map_data.creation.TileProjection;
 import org.osm2world.core.osm.creation.OverpassAPIReader;
-import org.osm2world.core.osm.creation.OverpassAPISource;
 import org.osm2world.core.target.obj.ObjWriter;
+import org.osm2world.core.util.functions.Factory;
 import org.osm2world.core.world.creation.WorldModule;
 import org.osm2world.core.world.modules.BuildingModule;
 
+import com.vividsolutions.jts.geom.Envelope;
+
 public class TileGenerator {
+
+	static Envelope tileToBBox(long x, long y, int zoom) {
+		double scale = 1 << zoom;
+
+		return new Envelope(TileProjection.xToLon(x / scale),
+				TileProjection.xToLon((x + 1) / scale),
+				TileProjection.yToLat(y / scale),
+				TileProjection.yToLat((y + 1) / scale));
+
+	}
+
 	public static void main(String[] args) {
 
 		long start = System.currentTimeMillis();
@@ -29,8 +43,6 @@ public class TileGenerator {
 		PerformanceListener perfListener = new PerformanceListener();
 
 		cf.addProgressListener(perfListener);
-
-		cf.setElevationCalculator(new ZeroElevationCalculator());
 
 		String query = "(way[\"building\"]{{bbox}};"
 				+ "way[\"building:part\"]{{bbox}};"
@@ -41,38 +53,52 @@ public class TileGenerator {
 				+ "(.parts;way(r.poly);)->.parts;"
 				+ "(node(w.parts);node(r.rel);.parts;.rel;);out;";
 
-		
-		double bottom = 53.071107696397085;
-		double left = 8.806142807006836;
-		double top = 53.07795294848583;
-		double right = 8.817451000213623;
+		int x = 17185;
+		int y = 10662;
+		int z = 15;
 
-//		OverpassAPISource source = new OverpassAPISource(left, right, top,
-//				bottom, null, query);
+		if (args.length == 3) {
+			x = Integer.parseInt(args[0]);
+			y = Integer.parseInt(args[1]);
+			z = Integer.parseInt(args[2]);
+		}
 
-		OverpassAPIReader source = new OverpassAPIReader(left, right, top,
-				bottom, null, query);
+		final Envelope bbox = tileToBBox(x, y, z);
+		System.out.println(bbox);
+
+		cf.setMapProjectionFactory(new Factory<OriginMapProjection>() {
+			@Override
+			public OriginMapProjection make() {
+				return new TileProjection(bbox);
+			}
+		});
+
+		OverpassAPIReader source = new OverpassAPIReader(
+				bbox.getMinX(), bbox.getMaxX(),
+				bbox.getMaxY(), bbox.getMinY(),
+				null, query);
 
 		Configuration config = new BaseConfiguration();
 		config.setProperty("createTerrain", Boolean.FALSE);
 		config.setProperty("renderUnderground", Boolean.FALSE);
-		config.setProperty("MapCenterLon", left);
-		config.setProperty("MapCenterLat", bottom);
-		
+		// config.setProperty("MapCenterLon", left);
+		// config.setProperty("MapCenterLat", bottom);
+
 		try {
-			List<WorldModule> modules = Arrays.asList((WorldModule)
-					new BuildingModule());
-			
-			Results results = cf.createRepresentations(source, modules, config, null);
+			List<WorldModule> modules = Arrays
+					.asList((WorldModule) new BuildingModule());
+
+			Results results = cf.createRepresentations(source, modules, config,
+					null);
 
 			results.getMapProjection();
-			
+
 			long startWrite = System.currentTimeMillis();
 			ObjWriter.writeObjFile(new File("test.obj"), results.getMapData(),
-					results.getEleData(), results.getTerrain(),
 					results.getMapProjection(), null, null);
 
-			System.out.println("write took " + (System.currentTimeMillis() - startWrite));
+			System.out.println("write took "
+					+ (System.currentTimeMillis() - startWrite));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -83,7 +109,8 @@ public class TileGenerator {
 						(perfListener.getPhaseDuration(Phase.REPRESENTATION) + 500) / 1000,
 						(perfListener.getPhaseDuration(Phase.ELEVATION) + 500) / 1000,
 						(perfListener.getPhaseDuration(Phase.TERRAIN) + 500) / 1000,
-						(System.currentTimeMillis() - perfListener.getPhaseEnd(Phase.TERRAIN) + 500) / 1000,
+						(System.currentTimeMillis()
+								- perfListener.getPhaseEnd(Phase.TERRAIN) + 500) / 1000,
 						(System.currentTimeMillis() - start + 500) / 1000);
 
 		System.out.println(a);
