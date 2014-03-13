@@ -9,6 +9,7 @@ public class TileProjection extends OriginMapProjection {
 	private double originX;
 	private double originY;
 	private double groundScale;
+	private final Envelope bbox;
 
 	public TileProjection(Envelope bbox) {
 
@@ -18,7 +19,11 @@ public class TileProjection extends OriginMapProjection {
 
 		originX *= groundScale;
 		originY *= groundScale;
+		this.bbox = bbox;
+	}
 
+	public double getTileScale() {
+		return groundScale * Math.abs(lonToX(bbox.getMaxX()) - lonToX(bbox.getMinX()));
 	}
 
 	public VectorXZ calcPos(double lat, double lon) {

@@ -24,72 +24,73 @@ import org.osm2world.core.target.common.rendering.Projection;
 public final class ObjWriter {
 
 	/** prevents instantiation */
-	private ObjWriter() { }
-	
+	private ObjWriter() {
+	}
+
 	public static final void writeObjFile(
 			File objFile, MapData mapData,
 			MapProjection mapProjection,
 			Camera camera, Projection projection)
 			throws IOException {
-		
+
 		if (!objFile.exists()) {
 			objFile.createNewFile();
 		}
-		
+
 		File mtlFile = new File(objFile.getAbsoluteFile() + ".mtl");
 		if (!mtlFile.exists()) {
 			mtlFile.createNewFile();
 		}
-		
+
 		PrintStream objStream = new PrintStream(objFile);
 		PrintStream mtlStream = new PrintStream(mtlFile);
-		
+
 		/* write comments at the beginning of both files */
-		
+
 		writeObjHeader(objStream, mapProjection);
-		
+
 		writeMtlHeader(mtlStream);
-				
+
 		/* write path of mtl file to obj file */
-		
+
 		objStream.println("mtllib " + mtlFile.getName() + "\n");
-		
+
 		/* write actual file content */
-		
-		ObjTarget target = new ObjTarget(objStream, mtlStream);
-		
+
+		ObjTarget target = new ObjTarget(objStream, mtlStream, mapProjection);
+
 		TargetUtil.renderWorldObjects(target, mapData, true);
-		
+
 		objStream.close();
 		mtlStream.close();
-		
+
 	}
-	
+
 	public static final void writeObjFiles(
 			final File objDirectory, MapData mapData,
 			final MapProjection mapProjection,
-			Camera camera, Projection projection,
+			final Camera camera, Projection projection,
 			int primitiveThresholdPerFile)
 			throws IOException {
-					
+
 		if (!objDirectory.exists()) {
 			objDirectory.mkdir();
 		}
-		
+
 		checkArgument(objDirectory.isDirectory());
-		
+
 		final File mtlFile = new File(objDirectory.getPath()
 				+ File.separator + "materials.mtl");
 		if (!mtlFile.exists()) {
 			mtlFile.createNewFile();
 		}
-		
+
 		final PrintStream mtlStream = new PrintStream(mtlFile);
-		
+
 		writeMtlHeader(mtlStream);
-		
+
 		/* create iterator which creates and wraps .obj files as needed */
-				
+
 		Iterator<ObjTarget> objIterator = new Iterator<ObjTarget>() {
 
 			private int fileCounter = 0;
@@ -104,53 +105,53 @@ public final class ObjWriter {
 			public ObjTarget next() {
 
 				try {
-					
+
 					if (objStream != null) {
 						objStream.close();
-						fileCounter ++;
+						fileCounter++;
 					}
-					
+
 					File objFile = new File(objDirectory.getPath() + File.separator
 							+ "part" + format("%04d", fileCounter) + ".obj");
-					
+
 					if (!objFile.exists()) {
 						objFile.createNewFile();
 					}
-					
+
 					objStream = new PrintStream(objFile);
-					
+
 					writeObjHeader(objStream, mapProjection);
-	
+
 					objStream.println("mtllib " + mtlFile.getName() + "\n");
-					
-					return new ObjTarget(objStream, mtlStream);
-					
+
+					return new ObjTarget(objStream, mtlStream, mapProjection);
+
 				} catch (FileNotFoundException e) {
 					throw new RuntimeException(e);
 				} catch (IOException e) {
 					throw new RuntimeException(e);
 				}
-				
+
 			}
 
 			@Override
 			public void remove() {
 				throw new UnsupportedOperationException();
 			}
-			
+
 		};
-		
+
 		/* write file content */
-		
+
 		TargetUtil.renderWorldObjects(objIterator, mapData, primitiveThresholdPerFile);
-		
+
 		mtlStream.close();
-		
+
 	}
 
 	private static final void writeObjHeader(PrintStream objStream,
 			MapProjection mapProjection) {
-		
+
 		objStream.println("# This file was created by OSM2World "
 				+ GlobalValues.VERSION_STRING + " - "
 				+ GlobalValues.OSM2WORLD_URI + "\n");
@@ -160,19 +161,19 @@ public final class ObjWriter {
 				+ "lon " + mapProjection.calcLon(VectorXZ.NULL_VECTOR) + ", "
 				+ "ele 0");
 		objStream.println("# North direction: " + new VectorXYZ(
-						mapProjection.getNorthUnit().x, 0,
-						- mapProjection.getNorthUnit().z));
+				mapProjection.getNorthUnit().x, 0,
+				-mapProjection.getNorthUnit().z));
 		objStream.println("# 1 coordinate unit corresponds to roughly "
 				+ "1 m in reality\n");
-		
+
 	}
 
 	private static final void writeMtlHeader(PrintStream mtlStream) {
-		
+
 		mtlStream.println("# This file was created by OSM2World "
 				+ GlobalValues.VERSION_STRING + " - "
 				+ GlobalValues.OSM2WORLD_URI + "\n");
-		
+
 	}
-			
+
 }

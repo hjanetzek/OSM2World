@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.osm2world.core.map_data.creation.MapProjection;
+import org.osm2world.core.map_data.creation.TileProjection;
 import org.osm2world.core.map_data.data.MapArea;
 import org.osm2world.core.map_data.data.MapElement;
 import org.osm2world.core.map_data.data.MapNode;
@@ -27,6 +29,8 @@ import org.osm2world.core.target.common.TextureData;
 import org.osm2world.core.target.common.material.Material;
 import org.osm2world.core.target.common.material.Materials;
 import org.osm2world.core.world.data.WorldObject;
+
+import com.google.common.collect.ImmutableList;
 
 public class ObjTarget extends FaceTarget<RenderableToObj> {
 
@@ -48,11 +52,17 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 	// this is approximatly one millimeter
 	private static final double SMALL_OFFSET = 1e-3;
 
-	public ObjTarget(PrintStream objStream, PrintStream mtlStream) {
+	private boolean scaleCoordinates;
+	private double coordinateScale;
+
+	public ObjTarget(PrintStream objStream, PrintStream mtlStream, MapProjection projection) {
 
 		this.objStream = objStream;
 		this.mtlStream = mtlStream;
-
+		if (projection instanceof TileProjection) {
+			scaleCoordinates = true;
+			coordinateScale = ((TileProjection) projection).getTileScale();
+		}
 	}
 
 	@Override
@@ -118,12 +128,68 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 	}
 
 	@Override
+	public void drawTriangles(Material material,
+			Collection<? extends TriangleXYZ> triangles,
+			List<List<VectorXZ>> texCoordLists) {
+
+		int i = 0;
+
+		List<List<VectorXZ>> subLists = new ArrayList<List<VectorXZ>>();
+
+		for (TriangleXYZ triangle : triangles) {
+
+			subLists.clear();
+			for (List<VectorXZ> list : texCoordLists) {
+				subLists.add(list.subList(3 * i, 3 * (i + 1)));
+			}
+
+			drawTriangle(material, triangle, null, subLists);
+
+			i++;
+		}
+	}
+
+	private final static double NORMAL_PRECISION = 10000;
+	private final static double COORD_PRECISION = 1000;
+
+	public void drawTriangle(Material material, TriangleXYZ triangle,
+			List<VectorXYZ> normals, List<List<VectorXZ>> texCoordLists) {
+
+		List<VectorXYZ> vs = triangle.getVertices();
+		VectorXYZ faceNormal = triangle.getNormal();
+		VectorXYZ clampedNormal = new VectorXYZ(
+				Math.round(faceNormal.x * NORMAL_PRECISION) / NORMAL_PRECISION,
+				Math.round(faceNormal.y * NORMAL_PRECISION) / NORMAL_PRECISION,
+				Math.round(faceNormal.z * NORMAL_PRECISION) / NORMAL_PRECISION);
+
+		int[] n = normalsToIndices(ImmutableList.of(clampedNormal));
+		int[] normalIndices = { n[0], n[0], n[0] };
+		int[] vertexIndices = verticesToIndices(vs);
+
+		for (int layer = 0; layer < max(1, material.getNumTextureLayers()); layer++) {
+
+			useMaterial(material, layer);
+
+			int[] texCoordIndices = null;
+			if (texCoordLists != null && !texCoordLists.isEmpty()) {
+				texCoordIndices = texCoordsToIndices(texCoordLists.get(layer));
+			}
+			if (layer > 0)
+				vertexIndices = verticesToIndices(offsetVertices(vs, nCopies(vs.size(), faceNormal),
+						layer * SMALL_OFFSET));
+
+			writeFace(vertexIndices, normalIndices, texCoordIndices);
+		}
+	}
+
+	@Override
 	public void drawFace(Material material, List<VectorXYZ> vs,
 			List<VectorXYZ> normals, List<List<VectorXZ>> texCoordLists) {
 
 		int[] normalIndices = null;
+		// if (vs.get(0) instanceof TriangleXYZWithNormals)
 		if (normals != null) {
-			normalIndices = normalsToIndices(normals);
+			normalIndices = normalsToIndices(vs);
 		}
 
 		VectorXYZ faceNormal = new TriangleXYZ(vs.get(0), vs.get(1), vs.get(2)).getNormal();
@@ -137,10 +203,11 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 				texCoordIndices = texCoordsToIndices(texCoordLists.get(layer));
 			}
 
-			writeFace(
-					verticesToIndices((layer == 0) ? vs : offsetVertices(vs, nCopies(vs.size(), faceNormal), layer
-							* SMALL_OFFSET)),
-					normalIndices, texCoordIndices);
+			int[] vertexIndices = verticesToIndices((layer == 0) ? vs :
+					offsetVertices(vs, nCopies(vs.size(), faceNormal), layer
+							* SMALL_OFFSET));
+
+			writeFace(vertexIndices, normalIndices, texCoordIndices);
 		}
 	}
 
@@ -230,7 +297,7 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 			Integer index = indexMap.get(v);
 			if (index == null) {
 				index = indexMap.size();
-				objStream.println(objLineStart + " " + formatVector(v));
+				objStream.println(objLineStart + formatVector(v));
 				indexMap.put(v, index);
 			}
 			indices[i] = index;
@@ -240,14 +307,47 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 
 	}
 
+	private final StringBuilder sb = new StringBuilder();
+
 	private String formatVector(Object v) {
 
 		if (v instanceof VectorXYZ) {
 			VectorXYZ vXYZ = (VectorXYZ) v;
-			return vXYZ.x + " " + vXYZ.y + " " + (-vXYZ.z);
+			sb.setLength(0);
+			sb.append(Math.round(vXYZ.x * COORD_PRECISION) / COORD_PRECISION);
+			sb.append(' ');
+			sb.append(Math.round(vXYZ.y * COORD_PRECISION) / COORD_PRECISION);
+			sb.append(' ');
+			sb.append(-Math.round(vXYZ.z * COORD_PRECISION) / COORD_PRECISION);
+			return sb.toString();
 		} else {
 			VectorXZ vXZ = (VectorXZ) v;
-			return vXZ.x + " " + vXZ.z;
+			sb.setLength(0);
+			sb.append(Math.round(vXZ.x * COORD_PRECISION) / COORD_PRECISION);
+			sb.append(' ');
+			sb.append(Math.round(vXZ.z * COORD_PRECISION) / COORD_PRECISION);
+			return sb.toString();
+		}
+	}
+
+	private String formatVectorScaled(Object v) {
+
+		if (v instanceof VectorXYZ) {
+			VectorXYZ vXYZ = (VectorXYZ) v;
+			sb.setLength(0);
+			sb.append(vXYZ.x);
+			sb.append(' ');
+			sb.append(vXYZ.y);
+			sb.append(' ');
+			sb.append(-vXYZ.z);
+			return sb.toString();
+		} else {
+			VectorXZ vXZ = (VectorXZ) v;
+			sb.setLength(0);
+			sb.append(vXZ.x);
+			sb.append(' ');
+			sb.append(vXZ.z);
+			return sb.toString();
 		}
 
 	}
@@ -261,18 +361,19 @@ public class ObjTarget extends FaceTarget<RenderableToObj> {
 		objStream.print("f");
 
 		for (int i = 0; i < vertexIndices.length; i++) {
+			sb.setLength(0);
+			sb.append(' ');
+			sb.append(vertexIndices[i] + 1);
 
-			objStream.print(" " + (vertexIndices[i] + 1));
+			sb.append('/');
+			if (texCoordIndices != null)
+				sb.append(texCoordIndices[i] + 1);
+			sb.append('/');
 
-			if (texCoordIndices != null && normalIndices == null) {
-				objStream.print("/" + (texCoordIndices[i] + 1));
-			} else if (texCoordIndices == null && normalIndices != null) {
-				objStream.print("//" + (normalIndices[i] + 1));
-			} else if (texCoordIndices != null && normalIndices != null) {
-				objStream.print("/" + (texCoordIndices[i] + 1)
-						+ "/" + (normalIndices[i] + 1));
-			}
+			if (normalIndices != null)
+				sb.append(normalIndices[i] + 1);
 
+			objStream.print(sb.toString());
 		}
 
 		objStream.println();

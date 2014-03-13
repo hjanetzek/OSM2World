@@ -37,11 +37,24 @@ public class TileGenerator {
 
 	public static void main(String[] args) {
 
+		int x = 17185;
+		int y = 10662;
+		int z = 15;
+
+		if (args.length == 3) {
+			x = Integer.parseInt(args[0]);
+			y = Integer.parseInt(args[1]);
+			z = Integer.parseInt(args[2]);
+		}
+		createTile(x, y, z);
+	}
+
+	public static void createTile(int x, int y, int z) {
 		long start = System.currentTimeMillis();
 
 		ConversionFacade cf = new ConversionFacade();
-		PerformanceListener perfListener = new PerformanceListener();
 
+		PerformanceListener perfListener = new PerformanceListener();
 		cf.addProgressListener(perfListener);
 
 		String query = "(way[\"building\"]{{bbox}};"
@@ -53,18 +66,8 @@ public class TileGenerator {
 				+ "(.parts;way(r.poly);)->.parts;"
 				+ "(node(w.parts);node(r.rel);.parts;.rel;);out;";
 
-		int x = 17185;
-		int y = 10662;
-		int z = 15;
-
-		if (args.length == 3) {
-			x = Integer.parseInt(args[0]);
-			y = Integer.parseInt(args[1]);
-			z = Integer.parseInt(args[2]);
-		}
-
 		final Envelope bbox = tileToBBox(x, y, z);
-		System.out.println(bbox);
+		System.out.println("tile " + z + "/" + x + "/" + y + "  " + bbox);
 
 		cf.setMapProjectionFactory(new Factory<OriginMapProjection>() {
 			@Override
@@ -94,8 +97,10 @@ public class TileGenerator {
 			results.getMapProjection();
 
 			long startWrite = System.currentTimeMillis();
-			ObjWriter.writeObjFile(new File("test.obj"), results.getMapData(),
-					results.getMapProjection(), null, null);
+			ObjWriter.writeObjFile(new File("test.obj"),
+					results.getMapData(),
+					results.getMapProjection(),
+					null, null);
 
 			System.out.println("write took "
 					+ (System.currentTimeMillis() - startWrite));
