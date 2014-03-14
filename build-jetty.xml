@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="." default="compile" name="tile-servlet">
+  <property name="build.dir" location="classes" />
+  <property name="src.dir" location="src" />
+  <property name="jetty.lib" location="lib" />
+
+  <path id="jetty.lib.path">
+    <pathelement path="lib/jetty-all-7.0.2.jar" />
+    <pathelement path="lib/servlet-api-2.5.jar" />
+    <pathelement path="lib/configuration/commons-collections-3.2.1.jar" />
+    <pathelement path="lib/configuration/commons-configuration-1.6.jar" />
+    <pathelement path="lib/configuration/commons-lang-2.6.jar" />
+    <pathelement path="lib/configuration/commons-logging-1.1.1.jar" />
+    <pathelement path="lib/jogl/gluegen-rt.jar" />
+    <pathelement path="lib/jogl/gluegen-rt-natives-linux-amd64.jar" />
+    <pathelement path="lib/jogl/gluegen-rt-natives-linux-i586.jar" />
+    <pathelement path="lib/jogl/gluegen-rt-natives-macosx-universal.jar" />
+    <pathelement path="lib/jogl/gluegen-rt-natives-windows-amd64.jar" />
+    <pathelement path="lib/jogl/gluegen-rt-natives-windows-i586.jar" />
+    <pathelement path="lib/jogl/jogl-all.jar" />
+    <pathelement path="lib/jogl/jogl-all-natives-linux-amd64.jar" />
+    <pathelement path="lib/jogl/jogl-all-natives-linux-i586.jar" />
+    <pathelement path="lib/jogl/jogl-all-natives-macosx-universal.jar" />
+    <pathelement path="lib/jogl/jogl-all-natives-windows-amd64.jar" />
+    <pathelement path="lib/jogl/jogl-all-natives-windows-i586.jar" />
+    <pathelement path="lib/jewelcli/jewelcli-0.6.jar" />
+    <pathelement path="lib/jts/jts-1.11.jar" />
+    <pathelement path="lib/osmosis/commons-compress-1.2.jar" />
+    <pathelement path="lib/osmosis/osmosis-core-0.41.jar" />
+    <pathelement path="lib/osmosis/osmosis-pbf-0.41.jar" />
+    <pathelement path="lib/osmosis/osmosis-xml-0.41.jar" />
+    <pathelement path="lib/osmosis/osmpbf-1.1.1-754a33af.jar" />
+    <pathelement path="lib/osmosis/protobuf-java-2.4.1.jar" />
+    <pathelement path="lib/osmosis/xercesImpl-2.9.1.jar" />
+    <pathelement path="lib/javaproj/javaproj-1.0.6.jar" />
+    <pathelement path="lib/guava/guava-r08.jar" />
+    <pathelement path="lib/trove/trove-111118193120.jar" />
+    <pathelement path="lib/poly2tri/poly2tri-core-0.1.1-SNAPSHOT.jar" />
+    <pathelement path="lib/slf4j/slf4j-api-1.7.5.jar" />
+    <pathelement path="lib/slf4j/slf4j-simple-1.7.5.jar" />
+    <pathelement path="lib/commons/commons-math3-3.0.jar" />
+    <pathelement path="lib/javailp/javailp-1.2a.jar" />
+    <pathelement path="lib/lp_solve/lpsolve55j.jar" />
+    <pathelement path="lib/jackson-core-2.1.4.jar" />
+  </path>
+
+  <target name="compile" description="Compile the project">
+    <mkdir dir="${build.dir}" />
+    <javac debug="true" destdir="${build.dir}" srcdir="${src.dir}" classpathref="jetty.lib.path">
+      <compilerarg value="-Xlint:unchecked" />
+      <compilerarg value="-Xlint:deprecation" />
+    </javac>
+  </target>
+
+  <target name="all" depends="clean,compile" description="Recompile from scratch" />
+
+  <target name="server" depends="compile" description="Launch the server">
+    <java classname="org.osm2world.tileserver.TileServer" fork="true" classpathref="jetty.lib.path">
+      <classpath>
+        <pathelement path="${build.dir}" />
+      </classpath>
+    </java>
+  </target>
+
+  <target name="clean" description="Delete all files created by compile">
+    <delete dir="${build.dir}" />
+    <delete dir="docs/api" />
+  </target>
+</project>
