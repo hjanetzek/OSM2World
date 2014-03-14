@@ -28,33 +28,37 @@ function init() {
 	controls.addEventListener('change', render);
 
 	scene = new THREE.Scene();
-	// scene.fog = new THREE.Fog(0x050505, 800, 2000);
-
-	// var path = "textures/cube/SwedishRoyalCastle/";
-	// var format = '.jpg';
-	// var urls = [ path + 'px' + format, path + 'nx' + format,
-	// path + 'py' + format, path + 'ny' + format, path + 'pz' + format,
-	// path + 'nz' + format ];
-	//
-	// reflectionCube = THREE.ImageUtils.loadTextureCube(urls);
-
+	scene.fog = new THREE.Fog(0xf5f5ff, 500, 5000);
+	
 	// LIGHTS
-
-	var ambient = new THREE.AmbientLight(0xcccccc);
+	var ambient = new THREE.AmbientLight(0x2f2f2a);
 	scene.add(ambient);
-
-	var light = new THREE.DirectionalLight(0xffffff, 1.0);
-	light.position.set(0, 200, 200);
-
+	
+	var light = new THREE.DirectionalLight(0xffeeee, 1.0);
+	light.position.set(200, 200, 200);
+	
 	// light = new THREE.SpotLight(0xffeedd, 0.3, 650, Math.PI / 2, 3);
 	// light.position.set(0, 500, 250);
 	//
-	// light.castShadow = true;
-	// light.shadowMapWidth = 2048;
-	// light.shadowMapHeight = 2048;
-	// light.shadowCameraFov = 45;
-	// light.shadowCameraVisible = true;
+	 light.castShadow = true;
+	 light.shadowMapWidth = 2048;
+	 light.shadowMapHeight = 2048;
+	 light.shadowCameraFov = 45;
+	 //light.shadowCameraVisible = true;
 	scene.add(light);
+
+	light = new THREE.DirectionalLight(0xeeeeff, 0.7);
+	light.position.set(-200, 200, -200);
+	scene.add(light);
+
+	// GROUND PLANE
+	plane = new THREE.Mesh(new THREE.PlaneGeometry(1000,1000), 
+			new THREE.MeshLambertMaterial({color: 0x121301}));
+	plane.rotation.x =  -Math.PI / 2;
+	plane.position.set(0, -200, 0);
+	plane.receiveShadow = true;
+
+    scene.add(plane);
 
 	// RENDERER
 	renderer = new THREE.WebGLRenderer({
@@ -71,13 +75,13 @@ function init() {
 	renderer.gammaInput = true;
 	renderer.gammaOutput = true;
 
-	// renderer.shadowMapEnabled = true;
-	// renderer.shadowMapBias = 0.0039;
-	// renderer.shadowMapDarkness = 0.5;
-	// renderer.shadowMapSoft = false;
-	// renderer.shadowCameraNear = 3;
-	// renderer.shadowCameraFar = camera.far;
-	// renderer.shadowCameraFov = 50;
+	 renderer.shadowMapEnabled = true;
+	 renderer.shadowMapBias = 0.0039;
+	 renderer.shadowMapDarkness = 0.5;
+	 renderer.shadowMapSoft = false;
+	 renderer.shadowCameraNear = 3;
+	 renderer.shadowCameraFar = camera.far;
+	 renderer.shadowCameraFov = 50;
 
 	// STATS
 	stats = new Stats();
@@ -107,7 +111,7 @@ function init() {
 	loader.load("test.ctm", function(geometry) {
 		// var material = new THREE.MeshBasicMaterial( { color: 0xdddddd, side:
 		// THREE.BackSide } );
-
+	    
 		var material = new THREE.MeshLambertMaterial({
 			color : 0xaaaaaa,
 			// map : THREE.ImageUtils.loadTexture("textures/UV_Grid_Sm.jpg"),
@@ -116,7 +120,7 @@ function init() {
 			reflectivity : 0.8,
 		// side : THREE.BackSide
 		});
-		callbackModel(geometry, 1, material, 0, -100, 0, 0, 0);
+		callbackModel(geometry, 1, material, 0, -200, 0, 0, 0);
 		checkTime();
 
 	}, {
