@@ -16,7 +16,7 @@ import org.osm2world.core.ConversionFacade.Results;
 import org.osm2world.core.map_data.creation.OriginMapProjection;
 import org.osm2world.core.map_data.creation.TileProjection;
 import org.osm2world.core.osm.creation.OverpassAPIReader;
-import org.osm2world.core.target.obj.ObjWriter;
+import org.osm2world.core.target.gltf.BinWriter;
 import org.osm2world.core.util.functions.Factory;
 import org.osm2world.core.world.creation.WorldModule;
 import org.osm2world.core.world.modules.BuildingModule;
@@ -97,7 +97,12 @@ public class TileGenerator {
 			results.getMapProjection();
 
 			long startWrite = System.currentTimeMillis();
-			ObjWriter.writeObjFile(new File("test.obj"),
+			// ObjWriter.writeObjFile(new File("test.obj"),
+			// results.getMapData(),
+			// results.getMapProjection(),
+			// null, null);
+
+			BinWriter.writeObjFile(new File("test.ctm"),
 					results.getMapData(),
 					results.getMapProjection(),
 					null, null);
